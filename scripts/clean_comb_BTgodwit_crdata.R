@@ -34,8 +34,10 @@ rename_sites <- function(x) {
 # tag <- read.csv('data/godwitdata/PortugalBase06.21.csv')[,-1]#, fileEncoding = "UTF-16")
 tag <- readxl::read_xlsx('data/godwitdata_josh/PortugalBase06.21.xlsx')[,-1]#, fileEncoding = "UTF-16")
 
-## "status"is New (ie, ringed for the first time), Recapture, Sighting or X=dead)
+## observer names (many repeated, and lists of multiple peeps)
+sort(unique(tag$`Resight Observer`))
 
+## "status"is New (ie, ringed for the first time), Recapture, Sighting or X=dead)
 # formatting
 tag$Date %<>% as.POSIXct(format='%d.%m.%y')
 tag$doy <- as.numeric(format(tag$Date, '%j')) # day of year
@@ -373,6 +375,10 @@ alldat %<>% bind_rows(gdu)
 ## combine w/ Irish - Cork Harbour data
 ire <- readRDS("data/analysis/ringing/ireland_BOmahony_clean.rds")
 alldat %<>% bind_rows(ire)
+
+##
+dutch2 <- readRDS("data/analysis/ringing/neth_MRoodbergen_clean.rds")
+alldat %<>% bind_rows(dutch2)
 
 
 ## SAVE ## --------------------------------------------------------------------
