@@ -1,5 +1,7 @@
-## overlay bird locations on vector dataset of 'sites' (IBAs, Ramsar, PAs)
-# and find closest site w/in a threshold distance
+### overlay bird locations on vector dataset of 'sites' (IBAs, Ramsar, PAs)
+## and find closest site w/in a threshold distance
+# Also quantify # consec. days bird is at same site
+
 
 pacman::p_load(dplyr, igraph, stringr, tictoc, ggplot2, data.table,
                sf, mapview, magrittr, lubridate)
@@ -9,7 +11,7 @@ pacman::p_load(dplyr, igraph, stringr, tictoc, ggplot2, data.table,
 
 ## tracking data
 # alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h.rds")
-alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_migids.rds")
+alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0.rds")
 
 alldat %<>% rename(bird_id = id)
 
@@ -169,7 +171,7 @@ alldat2 <- alldat2 %>%
 ## SAVE -----------------------------------------------------------------------
 
 # saveRDS(alldat2, "data/analysis/tracking/PTT_GPS_mconn_12h_ibas.rds")
-saveRDS(alldat2, "data/analysis/tracking/PTT_GPS_mconn_12h_no0_migids_ibas.rds")
+saveRDS(alldat2, "data/analysis/tracking/PTT_GPS_mconn_12h_no0_ibas.rds")
 
 
 ## get distances 

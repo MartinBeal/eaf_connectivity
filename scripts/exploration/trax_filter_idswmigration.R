@@ -1,4 +1,5 @@
 #### Identify and remove individuals w/out migration data
+## HAS BEEN CONVERTED INTO A FUNCTION: displ_dist()
 
 pacman::p_load(dplyr, amt, ggplot2)
 

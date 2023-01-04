@@ -14,7 +14,22 @@ trx <- bind_rows(dg, isl, ext, fra)
 trx %<>% dplyr::rename(
   ID = local_identifier, latitude = location_lat, longitude = location_long)
 
-## Remove worst ARGOS location 
+## make names 'valid' for all birds/datasets (DG alread done) -----------------
+
+trx$ID_orig <- trx$ID
+
+trx %<>% 
+  group_by(ID, ID_orig) %>% summarise() %>% 
+  ungroup() %>%
+  mutate(ID = raster::validNames(
+    stringi::stri_conv(ID))
+  ) %>% 
+  left_join(
+    dplyr::select(trx, -ID), 
+    by = "ID_orig") %>% 
+  dplyr::select(-ID_orig)
+
+## Remove worst ARGOS location ------------------------------------------------
 
 trx %<>% filter(argos_lc != "0")
 

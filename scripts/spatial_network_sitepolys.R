@@ -5,25 +5,29 @@
 pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2, 
                sf, mapview, magrittr, lubridate, netrankr)
 
-# datatype <- "metal"
+datatype <- "metal"
 # datatype <- "color"
-datatype <- "trax"
+# datatype <- "trax"
 
 if(datatype == "color"){
   ## color ringed bird captures and resightings overlaid on polygon layer
   alldat <- readRDS("data/analysis/ringing/cring_merge_no7dayreobs_ibas.rds")
+  alldat %<>% rename(timestamp = date)
 } else if (datatype == "metal"){
   ## metal ring captures, recaptures, recoveries
   alldat <- readRDS("data/analysis/ringing/euring_metal_ibas.rds")
+  alldat %<>% rename(timestamp = date)
 } else if (datatype == "trax"){
   ## tracking locations 
   # alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_ibas.rds")
-  alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_migids_ibas.rds")
+  alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_ibas.rds")
   # alldat %<>% rename(timestamp = date)
 }
 
 # fxn for splitting string into columns
 source("C:/Users/Martim Bill/Documents/R/source_scripts/str2col.R")
+# fxn for calc. displacement distance from first tracking locations
+source("C:/Users/Martim Bill/Documents/R/source_scripts/displ_dist.R")
 
 # alldat %<>% rename(combo = metal)
 # alldat %<>% filter(obssource == "euring") # which data sources
@@ -33,11 +37,11 @@ source("C:/Users/Martim Bill/Documents/R/source_scripts/str2col.R")
 
 ## which network to create
 # season <- "all"
-season <- "spring"
-# season <- "fall"
+# season <- "spring"
+season <- "fall"
 
 ### Separate networks for fall and spring migration
-## Spring: January 1 - June 30th, Fall: June 30th - January 31st
+## Spring: January 1 - June 30th, Fall: June 24th - January 31st
 
 if(season == "all"){ ## year-round
   netdat <- alldat ## all individuals
@@ -51,6 +55,33 @@ if(season == "all"){ ## year-round
   )
 }
 
+## Tracking data: rmv ids w/ only local displacement in season (i.e. no mig.)
+if(datatype == "trax"){
+  netdat <- rename(netdat, id = bird_id)
+  ## add column of diplacement distance from first location 
+  netdat <- displ_dist(netdat)
+  
+  ## Summarise max/avg distance from first points -------------------------------
+  
+  displ_id <- netdat %>% group_by(id) %>% 
+    summarise(
+      mn_displ = mean(disp_km),
+      sd_displ = sd(disp_km),
+      md_displ = median(disp_km),
+      mx_displ = max(disp_km)
+    )
+  
+  ## remove individuals w/ only local displacement (i.e. no migration)
+  
+  wmig <- filter(displ_id, mx_displ >= 200)
+  
+  n_distinct(netdat$id)
+  netdat %<>% filter(id %in% wmig$id)
+  n_distinct(netdat$id) 
+  
+  netdat <- rename(netdat, bird_id = id)
+  
+}
 
 ## show data from a certain place
 # netdat <- subset(netdat, bird_id %in% unique(alldat$bird_id)[1:100])
@@ -67,6 +98,7 @@ if(season == "all"){ ## year-round
 
 ## 
 netdat %<>% rename(site_poly = IntName) ## IBAs only
+
 
 ###---------------------------------------------------------------------------
 ### network ------------------------------------------------------------------
@@ -253,9 +285,8 @@ edgesf <- netsf %>% activate("edges") %>% sf::st_as_sf()
 # mapview::mapview(nodesf, zcol="n_id")
 # mapview::mapview(nodesf, zcol="between")
 # mapview::mapview(nodesf, zcol="degree")
-mapview::mapview(nodesf, zcol="degree_w")
 # mapview::mapview(nodesf, zcol="between_norm")
-# mapview::mapview(nodesf, zcol="degree_rank")
+mapview::mapview(nodesf, zcol="degree_rank")
 # mapview::mapview(nodesf, zcol="btwn_rank")
 
 # mapview::mapview(nodesf, zcol="btwn_rank") 
