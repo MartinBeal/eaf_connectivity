@@ -8,12 +8,17 @@ pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2,
                sf, mapview, magrittr, lubridate, dggridR, data.table)
 
 
-# datatype <- "ring"
-datatype <- "trax"
+# datatype <- "metal"
+datatype <- "color"
+# datatype <- "trax"
 
-if(datatype == "ring"){
+
+if(datatype == "color"){
   ## ring relocations overlaid on polygon layer
   alldat <- readRDS("data/analysis/ringing/outside_ibas10km.rds") ## IBAs
+} else if (datatype == "metal"){
+  ## metal ring locations overlaid on polygon layer
+  alldat <- readRDS("data/analysis/ringing/") ## IBAs
 } else if (datatype == "trax"){
   ## tracking locations overlaid on polygon layer
   alldat <- readRDS("data/analysis/tracking/outside_PTT_GPS_ibas10km.rds") ## IBAs
@@ -236,7 +241,7 @@ bbox_prj <- st_bbox(
 
 ###
 map <- ggplot() +
-  geom_sf(data = wmap_prj, fill = "grey80", color = NA) +
+  geom_sf(data = wmap_prj, fill = "grey70", color = NA) +
   # geom_sf(data = edge_prj,
   #         aes(size = n_id), col = "black") + #, alpha = 0.65
   geom_sf(data = wmap_prj, fill = NA, color = "white", size=0.2) +
@@ -273,7 +278,7 @@ ggsave(paste0("figures/", datatype,"_", season, "_outside_iba10kmX.png.png"),
 #
 # ###
 # map2 <- ggplot() +
-#   geom_sf(data = wmap_prj, fill = "grey80", color = NA) +
+#   geom_sf(data = wmap_prj, fill = "grey70", color = NA) +
 #   geom_sf(data = grid_cs,
 #           aes(fill = count), color=NA) +
 #   # geom_sf(data = edge_prj,

@@ -1,4 +1,4 @@
-## EURING
+## EURING data prep - BTGO
 
 pacman::p_load(dplyr, magrittr, stringr, lubridate)
 
@@ -18,8 +18,8 @@ sch %<>% mutate(Code = str_remove(Code, "  "))
 all <- left_join(all, sch[, 1:2], by=c("Scheme"="Code"))
 all %<>% dplyr::rename(scheme_country = Country)
 
-### Limosa limosa -------------------------------------------------------------
 
+### Limosa limosa -------------------------------------------------------------
 ll <- all[which(str_detect(all$scientific_name, "Limosa limosa")), ]
 table(ll$scheme_country)
 rm(all)
@@ -83,12 +83,37 @@ ll %<>%
     combo   = NA
   ) %>% 
   dplyr::select(bird_id, Ring, combo, Date, everything()) %>% 
-  rename(metal = Ring, date = Date) %>% 
+  dplyr::rename(metal = Ring, date = Date) %>% 
   as_tibble()
+
+## 
+
+ll %<>% dplyr::select(
+  bird_id, metal, combo, date, latitude, longitude, CoordAcc, obstype, 
+  obssource, scheme_country
+)
 
 ## remove records w/ spatial accuracy > 20 km (~900)
 ll %<>% filter(CoordAcc < 4)
 
+## keep only records from 1980-present
+ll %<>% filter(year(date) >= 1980)
+
+## remove ring re-sighint records (keeping only recaptures and recoveries)
+ll_noresight <- filter(ll, obstype %in% "S")
+
+## separate finnish resightigns (color-ring records)
+ll_fin <- filter(ll, scheme_country == "Finland")
+
+## map
+ll %>% filter(obstype == "S") %>%
+    sf::st_as_sf(coords = c("longitude", "latitude"),
+                 crs = 4326, agr = "constant") %>%
+    mapview()
+
 ## SAVE -----------------------------------------------------------------------
 
 saveRDS(ll, "data/analysis/ringing/EURING_BTGO.rds")
+saveRDS(ll_noresight, "data/analysis/ringing/EURING_BTGO_noresight.rds")
+saveRDS(ll_fin, "data/analysis/ringing/EURING_BTGO_finland_cr.rds")
+

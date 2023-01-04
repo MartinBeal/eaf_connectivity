@@ -1,9 +1,13 @@
 ## Streamline dataset by removing observations of the same individual closely
 # spaced in time and space
 
+pacman::p_unload(plyr)
 pacman::p_load(data.table, dplyr, magrittr)
 
-alldat <- readRDS("data/analysis/ringing/comb_euring_cring.rds")
+## both euring and cr obs
+# alldat <- readRDS("data/analysis/ringing/comb_euring_cring.rds")
+## cr obs only
+alldat <- readRDS("data/analysis/ringing/cr_merge.rds")
 
 
 ## get time difference between obs per bird -----------------------------------
@@ -96,7 +100,11 @@ alldat_f2 %<>%
 
 ## SAVE -----------------------------------------------------------------------
 
+# saveRDS(alldat_f2,
+#         paste0("data/analysis/ringing/comb_euring_cring_no", ttime,
+#                "dayreobs.rds")
+#         )
 saveRDS(alldat_f2,
-        paste0("data/analysis/ringing/comb_euring_cring_no", ttime,
+        paste0("data/analysis/ringing/cring_merge_no", ttime,
                "dayreobs.rds")
-        )
+)

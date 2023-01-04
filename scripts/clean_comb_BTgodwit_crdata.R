@@ -246,6 +246,9 @@ wash <- wash[-which(wash$country != wash$`Resight country`), ]
 ## fix latitude values erroneously above 99 deg
 wash[which(wash$n > 99),"n"] <- as.numeric(substring((subset(wash, wash$n > 99)$n), 2))
 
+## fix longitude
+wash$w <- as.numeric(wash$w)
+
 ## use multiple location columns to infer which is correct and fill in NAs
 wash$site <- ifelse(is.na(wash$tbl_location.site), wash$Site...31, wash$tbl_location.site)
 
@@ -259,8 +262,8 @@ wash$region <- ifelse(
          wash$Region...27))
 
 wash$county <- ifelse(is.na(wash$County), wash$tbl_location.county, wash$County)
-
 wash$country <- wash$`Resight country`
+
 
 ## clean it up
 wash_clean <- wash %>% 
@@ -335,16 +338,6 @@ alldat$latitude <- ifelse(alldat$latitude > 90, alldat$latitude/1000000, alldat$
 ## indicate these are color-ring data
 alldat$obssource <- rep("cr")
 
-# alldat$bird_id <- ifelse( # combine cr and metal code, use _ 
-#   is.na(alldat$combo),    # to signify where one or other is missing
-#   alldat$metal, 
-#   ifelse(
-#     is.na(alldat$metal), 
-#     alldat$combo, 
-#     paste(alldat$combo, alldat$metal, sep="_")
-#   )
-# )
-
 # alldat %<>%
 #   dplyr::select(bird_id, date, combo, metal, obstype, age, site, latitude, 
 #                 longitude, everything())
@@ -376,9 +369,51 @@ alldat %<>% bind_rows(gdu)
 ire <- readRDS("data/analysis/ringing/ireland_BOmahony_clean.rds")
 alldat %<>% bind_rows(ire)
 
-##
+## Dutch data - Maja R.
 dutch2 <- readRDS("data/analysis/ringing/neth_MRoodbergen_clean.rds")
 alldat %<>% bind_rows(dutch2)
+
+## UK data - Ian Nicholson
+uk2 <- readRDS("data/analysis/ringing/uk_INicholson_clean.rds")
+alldat %<>% bind_rows(uk2)
+
+
+## Convert cr-schemes into countries
+crschemes <- read.csv("data/color/scheme_countries.csv")
+alldat     <- left_join(alldat, crschemes)
+
+##* combine w/ Finnish cr records from Euring
+ll_fin <- readRDS("data/analysis/ringing/EURING_BTGO_finland_cr.rds")
+ll_fin$scheme <- "finland"
+
+alldat <- full_join( # join filtered euring data w/ all crdata
+  alldat, ll_fin, 
+  by=c("combo", "metal", "date", "longitude", "latitude", "obstype", "obssource", 
+       "scheme", "scheme_country"))
+
+## check for missing coords
+sum(is.na(alldat$latitude))
+# alldat$scheme[which(is.na(alldat$latitude))]
+
+## remove missing coords
+alldat %<>% filter(!is.na(latitude))
+alldat %<>% filter(!is.na(longitude))
+sum(is.na(alldat$latitude))
+
+
+## create bird_id -------------------------------------------------------------
+## make bird id cr unless missin, then use metal 
+x <- ifelse(
+  is.na(alldat$combo),
+  alldat$metal,
+  alldat$combo
+)
+alldat$bird_id <- ifelse(
+  is.na(alldat$combo) | is.na(alldat$metal),    
+  x,
+  alldat$combo
+)
+sum(is.na(alldat$bird_id))
 
 
 ## SAVE ## --------------------------------------------------------------------

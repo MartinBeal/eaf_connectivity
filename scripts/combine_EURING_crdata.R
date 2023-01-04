@@ -1,4 +1,4 @@
-### Combine color-ringing and EURING datasets ---------------------------------
+### Filter EURING by color-ringing data (and combine)--------------------------
 
 pacman::p_unload(plyr)
 pacman::p_load(dplyr, magrittr, stringr)
@@ -12,8 +12,8 @@ ll <- readRDS("data/analysis/ringing/EURING_BTGO.rds") # limosa limosa
 crschemes <- read.csv("data/color/scheme_countries.csv")
 crdat     <- left_join(crdat, crschemes)
 
-## Identifying shared records btwn EURING and scheme-leader datasets
 
+## Identifying shared records btwn EURING and scheme-leader datasets ----------
 ## how many metal ids are shared?
 euids <- unique(ll$metal)
 crids <- unique(crdat$metal)
@@ -44,7 +44,6 @@ alldat %<>% dplyr::select(
   "obssource", "site", "area", "county", "country", "region", "scheme_country")
 
 ## create universal bird_id w/ either metal or combo or both
-
 alldat$bird_id <- ifelse( # combine cr and metal code, use _
   is.na(alldat$combo),    # to signify where one or other is missing
   alldat$metal,
@@ -67,6 +66,12 @@ alldat <- subset(alldat, !bird_id %in% xx$bird_id)
 alldat %<>% filter(!is.na(latitude))
 alldat %<>% filter(!is.na(longitude))
 
+## remove birds w/ only one sighting
+xz <- ll_f %>% group_by(bird_id) %>% summarise(nobs = n()) %>% filter(nobs == 1)
+ll_f <- subset(ll_f, !bird_id %in% xz$bird_id)
+
 ## Save -----------------------------------------------------------------------
 
-saveRDS(alldat, "data/analysis/ringing/comb_euring_cring.rds")
+# saveRDS(alldat, "data/analysis/ringing/comb_euring_cring.rds")
+saveRDS(ll_f, "data/analysis/ringing/euring_filtbycr.rds")
+

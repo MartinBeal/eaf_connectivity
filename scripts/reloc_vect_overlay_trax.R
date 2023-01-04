@@ -8,7 +8,8 @@ pacman::p_load(dplyr, igraph, stringr, tictoc, ggplot2, data.table,
 # alldat <- readRDS("data/analysis/ringing/comb_euring_cring_no7dayreobs.rds")
 
 ## tracking data
-alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h.rds")
+# alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h.rds")
+alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_migids.rds")
 
 alldat %<>% rename(bird_id = id)
 
@@ -95,7 +96,7 @@ singles <- bind_cols(
   single_ibas[,c("SitRecID", "IntName")])
 
 
-## multiple polygons ---------------------------------------------------------
+## points overlapping multiple polygons ---------------------------------------
 multis   <- out[which(whichpoly == "multiple"), ]
 multi_sf <- out_sf[which(whichpoly == "multiple"), ]
 
@@ -142,7 +143,7 @@ alldat2 %<>% mutate(
 #   crs = 4326) %>% mapview())
 
 
-## Calculate number of consecutive days spent at a site -------------------------
+## Calculate number of consecutive days spent at a site -----------------------
 alldat2 <- as.data.table(alldat2)
 
 ## id consecutive obs at a site, per bird (data.table way)
@@ -161,10 +162,14 @@ alldat2 <- alldat2 %>%
 #   coords = c("longitude", "latitude"),
 #   crs = 4326) %>% mapview()
 
+# alldat2 %>% filter(bird_id == "R\xfcschke") %>% 
+#   st_as_sf(coords = c("longitude", "latitude"), 
+#            crs = 4326, agr = "constant") %>% mapview()
 
 ## SAVE -----------------------------------------------------------------------
 
-saveRDS(alldat2, "data/analysis/tracking/PTT_GPS_mconn_12h_ibas.rds")
+# saveRDS(alldat2, "data/analysis/tracking/PTT_GPS_mconn_12h_ibas.rds")
+saveRDS(alldat2, "data/analysis/tracking/PTT_GPS_mconn_12h_no0_migids_ibas.rds")
 
 
 ## get distances 

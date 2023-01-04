@@ -3,18 +3,23 @@
 
 
 pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2, 
-               sf, mapview, magrittr, lubridate)
+               sf, mapview, magrittr, lubridate, netrankr)
 
-# datatype <- "ring"
+# datatype <- "metal"
+# datatype <- "color"
 datatype <- "trax"
 
-if(datatype == "ring"){
-  ## ring relocations overlaid on polygon layer
-  alldat <- readRDS("data/analysis/ringing/comb_euring_cring_no7dayreobs_ibas.rds")
-  alldat %<>% rename(timestamp = date)
+if(datatype == "color"){
+  ## color ringed bird captures and resightings overlaid on polygon layer
+  alldat <- readRDS("data/analysis/ringing/cring_merge_no7dayreobs_ibas.rds")
+} else if (datatype == "metal"){
+  ## metal ring captures, recaptures, recoveries
+  alldat <- readRDS("data/analysis/ringing/euring_metal_ibas.rds")
 } else if (datatype == "trax"){
-  ## tracking locations overlaid on polygon layer
-  alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_ibas.rds")
+  ## tracking locations 
+  # alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_ibas.rds")
+  alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_migids_ibas.rds")
+  # alldat %<>% rename(timestamp = date)
 }
 
 # fxn for splitting string into columns
@@ -27,18 +32,38 @@ source("C:/Users/Martim Bill/Documents/R/source_scripts/str2col.R")
 ## choose data subset to run --------------------------------------------------
 
 ## which network to create
-season <- "all"
-# season <- "spring"
+# season <- "all"
+season <- "spring"
 # season <- "fall"
 
-# netdat <- subset(alldat, bird_id %in% unique(alldat$bird_id)[1:100])
+### Separate networks for fall and spring migration
+## Spring: January 1 - June 30th, Fall: June 30th - January 31st
 
 if(season == "all"){ ## year-round
   netdat <- alldat ## all individuals
-} else { ## separate networks for fall and spring migration 
-  alldat$season <- ifelse(month(alldat$timestamp) < 7, "spring", "fall")
-  netdat <- alldat[which(alldat$season == season), ]
+} else if(season == "spring"){
+  netdat <- subset(alldat, month(alldat$timestamp) %in% c(1:6))
+} else if(season == "fall"){
+  doy <- lubridate::yday(alldat$timestamp) # June 23/24: 175
+  netdat <- subset(
+    alldat, 
+    month(alldat$timestamp) %in% c(1, 7:12) | doy %in% c(175:181)
+  )
 }
+
+
+## show data from a certain place
+# netdat <- subset(netdat, bird_id %in% unique(alldat$bird_id)[1:100])
+# netdat <- subset(netdat, scheme_country == "Iceland")
+
+## top sites visited
+# xx <- netdat %>% group_by(SitRecID, IntName, country) %>% 
+#   summarise(
+#     n_birds = n_distinct(bird_id),
+#     n_obs   = n()
+#   ) %>% arrange(desc(n_birds)) %>% ungroup() %>% 
+#   filter(country != "Iceland") %>% 
+#   slice(1:11)
 
 ## 
 netdat %<>% rename(site_poly = IntName) ## IBAs only
@@ -50,18 +75,43 @@ netdat %<>% rename(site_poly = IntName) ## IBAs only
 nones  <- filter(netdat, site_poly == "none")
 
 ## filter to only obs w/in sites (and for trax, only site visits >= 2 days)
-if(datatype == "ring"){
-  saveRDS(nones, "data/analysis/ringing/outside_ibas10km.rds")
+if(datatype == "color"){
+  saveRDS(
+    nones, 
+    paste0("data/analysis/ringing/color_outside_", season, "_ibas10km.rds"))
+  netdat <- filter(netdat, site_poly != "none")
+} else if (datatype == "metal"){
+  saveRDS(
+    nones, 
+    paste0("data/analysis/ringing/metal_outside_", season, "_ibas10km.rds"))
   netdat <- filter(netdat, site_poly != "none")
 } else if (datatype == "trax"){
-  saveRDS(nones, "data/analysis/tracking/outside_PTT_GPS_ibas10km.rds")
-  netdat <- filter(netdat, site_poly != "none" & n_day > 1)
+  saveRDS(
+    nones, 
+    paste0("data/analysis/tracking/outside_PTT_GPS_", season, "_ibas10km.rds"))
+  netdat <- filter(netdat, site_poly != "none" & n_day >= 2)
 }
 
-## numeric code of nodes/sites
+## again remove birds w/ only one sighting (to avoid unconnected nodes) -------
+##**WILL NEED TO ADD BACK IN TO MAKE COMPARISONS W/ OUTSIDE POINTS ##
+xz <- netdat %>% group_by(bird_id) %>% summarise(nobs = n()) %>% filter(nobs == 1)
+netdat <- subset(netdat, !bird_id %in% xz$bird_id)
+
+## remove birds only seen (multiple times) at same site ----------------------- 
+##**ALSO HERE WILL NEED TO ADD BACK IN TO MAKE COMPARISONS W/ OUTSIDE POINTS ##
+nsites <- netdat %>% group_by(bird_id) %>% 
+  summarise(nsites = n_distinct(site_poly))
+
+## % of birds w/ relocs at one site only
+sum(nsites$nsites == 1) / n_distinct(netdat$bird_id) * 100
+
+xz2 <- filter(nsites, nsites == 1)
+netdat <- subset(netdat, !bird_id %in% xz2$bird_id)
+
+## numeric code of nodes/sites ------------------------------------------------
 netdat$loc_num <- as.numeric(as.factor(netdat$site_poly))
 
-# create reference table of sites w/ obs
+# create reference table of sites w/ obs --------------------------------------
 site_summ <- netdat %>% group_by(loc_num, site_poly) %>% 
   summarise(latitude = mean(latitude), longitude = mean(longitude))
 
@@ -96,9 +146,12 @@ noself <- full[-which(full$Var1 == full$Var2), ]
 noself$sitecomb <- paste(noself$Var1, noself$Var2)
 
 ## retain only unique site combos, summ how many individuals for connex
+n_id_total <- n_distinct(noself$bird_id)
+
 edgelist <- noself %>% group_by(sitecomb) %>% 
   summarise(
-    n_id = n()
+    n_id = n(),
+    prop_id = n_id / n_id_total
   )
 
 ## re-split site combos into separate columns
@@ -111,12 +164,12 @@ edgelist <- cbind(
   mutate(
     from = as.integer(from), to = as.integer(to)
   ) %>% 
-  dplyr::select(from, to, n_id) %>% 
+  dplyr::select(from, to, n_id, prop_id) %>% 
   as_tibble()
 
 
 ## Vertex list ---------------------------------------------------------------
-if(datatype == "ring"){
+if(datatype %in% c("color", "metal")){
   n_obstype <- netdat %>% 
     group_by(loc_num, obstype) %>% 
     summarise(
@@ -139,10 +192,13 @@ if(datatype == "ring"){
     )
 }
 
+n_id_total <- n_distinct(netdat$bird_id)
+
 nodelist <- netdat %>% group_by(loc_num) %>% 
   summarise(
-    n_id = n_distinct(bird_id),
-    n_obs  = n()
+    n_id    = n_distinct(bird_id),
+    prop_id = n_id / n_id_total,
+    n_obs   = n()
   ) %>% right_join(n_obstype)
 
 nodelist <- nodelist %>% 
@@ -156,66 +212,61 @@ nodelist <- nodelist %>%
 netsf <- sfnetwork(nodelist, edgelist, node_key = "dist", directed = F, 
                    edges_as_lines = TRUE)
 
-## if it gives an error try running via igraph
-# graph_from_data_frame(
-#   d = edgelist, 
-#   vertices = nodelist,
-#   directed = F)
 
 ## filter out sites (and links) w/ few observations
-netsf <- netsf %>%
-  activate("nodes") %>%
-  filter(n_id > 1)
+# netsf <- netsf %>%
+#   activate("nodes") %>%
+#   filter(n_id > 1)
+
+
+### Calculate network metrics ------------------------------------------------
+
+# netsf <- readRDS("data/analysis/networks/metal_all_iba10km_poly.rds") # metal
+# netsf <- readRDS("data/analysis/networks/color_all_iba10km_poly.rds") # color
+# netsf <- readRDS("data/analysis/networks/trax_all_iba10km_poly.rds")  # trax
+
+# Degree = the number of adjacent edges for a node
+# Betweenness = the number of shortest paths going through a node
+
+## global metrics 
+netsize <- nrow(st_as_sf(netsf, "nodes")) # network size (n nodes)
+nedges  <- nrow(st_as_sf(netsf, "edges"))
+
+## ego metrics (node/edge-level)
+netsf %<>%
+  activate(nodes) %>%
+  mutate(
+    degree      = centrality_degree(),
+    degree_norm = degree / n_distinct(loc_num), # normalized 0-1 (prop of sites)
+    degree_rank = dense_rank(desc(degree)),
+    between     = centrality_betweenness(directed = FALSE), # node betweenness
+    between_norm = centrality_betweenness(directed = FALSE, normalized = T), # normalized
+    btwn_rank   = dense_rank(desc(between))
+  )
 
 ## interactive map it
 nodesf <- netsf %>% activate("nodes") %>% sf::st_as_sf()
-# netsf %>% activate("edges") %>% sf::st_as_sf() %>% mapview::mapview() +
+edgesf <- netsf %>% activate("edges") %>% sf::st_as_sf()
 #   mapview::mapview(nodesf, zcol="n_id")
+
 ## just nodes
-mapview::mapview(nodesf, zcol="n_id")
+# mapview::mapview(nodesf, zcol="n_id")
+# mapview::mapview(nodesf, zcol="between")
+# mapview::mapview(nodesf, zcol="degree")
+mapview::mapview(nodesf, zcol="degree_w")
+# mapview::mapview(nodesf, zcol="between_norm")
+# mapview::mapview(nodesf, zcol="degree_rank")
+# mapview::mapview(nodesf, zcol="btwn_rank")
 
+# mapview::mapview(nodesf, zcol="btwn_rank") 
+# mapview::mapview(nodesf, zcol="btwn_rank") +
+# (filter(edgesf, from %in% 241 | to %in% 241) %>% 
+#   mapview::mapview())
 
-## Static map: project for prettier map --------------------------------------
-library(rworldmap)
-# get world map
-wmap <- getMap(resolution="high")
+## SAVE ##
 
-## Lambert EA: EPSG:3035 ## Lambert CConic: EPSG:3034
-wmap_prj <- st_as_sf(wmap) %>% st_transform(crs = "EPSG:3035")
-edge_prj <- st_as_sf(netsf, "edges") %>% st_transform(crs = "EPSG:3035")
-node_prj <- st_as_sf(netsf, "nodes") %>% st_transform("EPSG:3035")
-# bbox_prj <- st_bbox(edge_prj)
-bbox_prj <- st_bbox(
-  c(xmin = -16, xmax = 21,
-    ymin = 8, ymax = 65.2), crs = 4326) %>% 
-  st_as_sfc() %>% st_transform("EPSG:3035") %>% st_bbox()
+saveRDS(netsf, paste0("data/analysis/networks/", datatype,"_", season, "_iba10km_poly.rds"))
+
 
 ###
-map <- ggplot() +
-  geom_sf(data = wmap_prj, fill = "grey80", color = NA) +
-  geom_sf(data = edge_prj,
-          aes(size = n_id), col = "black") + #, alpha = 0.65
-  geom_sf(data = wmap_prj, fill = NA, color = "white", size=0.2) +
-  geom_sf(data = arrange(node_prj, n_id), 
-          aes(col = n_id)) +
-  coord_sf(xlim = 
-             c(bbox_prj[1], bbox_prj[3]), ylim = c(bbox_prj[2], bbox_prj[4]), 
-           expand = T) +
-  scale_size(range = c(0.01, 2)) +
-  # theme_void() +
-  theme(
-    plot.background = element_rect(fill = "white"),
-    panel.background = element_rect(fill = "white"),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-    panel.border = element_rect(colour = "black", fill=NA, size=.5),
-    legend.key=element_blank()
-  )
-
-
-## SAVE map -------------------------------------------------------------------
-
-ggsave(paste0("figures/", datatype,"_", season, "_iba10kmX.png"), plot=map, width=5, height = 6)
-
 

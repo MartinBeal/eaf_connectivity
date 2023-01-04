@@ -4,8 +4,16 @@
 pacman::p_load(dplyr, igraph, stringr, tictoc, ggplot2, 
                sf, mapview, magrittr, lubridate)
 
-## ring recovery data
-alldat <- readRDS("data/analysis/ringing/comb_euring_cring_no7dayreobs.rds")
+datatype <- "metal"
+# datatype <- "color"
+
+if(datatype == "color"){
+  ## ring relocations overlaid on polygon layer
+  alldat <- readRDS("data/analysis/ringing/cring_merge_no7dayreobs.rds")
+} else if (datatype == "metal"){
+  ## tracking locations overlaid on polygon layer
+  alldat <- readRDS("data/analysis/ringing/euring_filtbycr.rds") ## IBAs
+}
 
 ## polygon dataset (IBAs)
 iba <- st_read("data/geodata/ibas/EAF_btgo_IBA/eaf_btgo_iba.shp")
@@ -135,7 +143,15 @@ alldat2 %<>% mutate(
 
 ## SAVE -----------------------------------------------------------------------
 
-saveRDS(alldat2, "data/analysis/ringing/comb_euring_cring_no7dayreobs_ibas.rds")
+if(datatype == "color"){
+  ## color resightings
+  saveRDS(alldat2, "data/analysis/ringing/cring_merge_no7dayreobs_ibas.rds")
+  } else if (datatype == "metal"){
+  ## tracking locations overlaid on polygon layer
+    saveRDS(alldat2, "data/analysis/ringing/euring_metal_ibas.rds")
+}
+
+# saveRDS(alldat2, "data/analysis/ringing/comb_euring_cring_no7dayreobs_ibas.rds")
 
 
 ## get distances 
