@@ -1,5 +1,6 @@
-## Create a spatial, undirected network from ring recapture and resighting data
-# to sites defined using a polygon layer (IBAs, RAMSAR etc)
+### Create a spatial, undirected network from ring recapture and resighting data
+## to sites defined using a polygon layer (IBAs, RAMSAR etc)
+# VERSION that combines in and out sites into network
 
 pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2, 
                sf, mapview, magrittr, lubridate, netrankr)
@@ -104,37 +105,80 @@ netdat %<>% rename(site_poly = IntName) ## IBAs only
 ###---------------------------------------------------------------------------
 ### network ------------------------------------------------------------------
 
-## (optionally) remove locations falling outside any site polygon
-nones  <- filter(netdat, site_poly == "none")
+##@ Create hexgrid cell 'sites' for points falling outside known site layer ---
+## separate locations falling outside any site polygon
+outdat  <- filter(netdat, site_poly == "none")
+indat  <- filter(netdat, site_poly != "none")
 
 ## filter to only obs w/in sites (and for trax, only site visits >= 2 days)
-if(datatype == "color"){
-  saveRDS(
-    nones, 
-    paste0("data/analysis/ringing/color_outside_", season, "_ibas10km.rds"))
-  netdat <- filter(netdat, site_poly != "none")
-} else if (datatype == "metal"){
-  saveRDS(
-    nones, 
-    paste0("data/analysis/ringing/metal_outside_", season, "_ibas10km.rds"))
-  netdat <- filter(netdat, site_poly != "none")
-} else if (datatype == "trax"){
-  saveRDS(
-    nones, 
-    paste0("data/analysis/tracking/outside_trax_", season, "_ibas10km.rds"))
-  netdat <- filter(netdat, site_poly != "none" & n_day >= 2)
+# if(datatype == "color"){
+#   saveRDS(
+#     outdat, 
+#     paste0("data/analysis/ringing/color_outside_", season, "_ibas10km.rds"))
+# } else if (datatype == "metal"){
+#   saveRDS(
+#     outdat, 
+#     paste0("data/analysis/ringing/metal_outside_", season, "_ibas10km.rds"))
+# } else if (datatype == "trax"){
+#   saveRDS(
+#     outdat, 
+#     paste0("data/analysis/tracking/outside_trax_", season, "_ibas10km.rds"))
+# }
+
+
+## Hexgrid --------------------------------------------------------------------
+
+## Construct global grid with cells approximately 1000 miles across
+# dggs <- dgconstruct(spacing=8, resround='down')
+dggs <- dgconstruct(spacing=10, resround='down')
+
+## extract cell # for each relocation
+outdat$cell <- dgGEO_to_SEQNUM(
+  dggs, outdat$longitude, outdat$latitude)$seqnum
+
+outdat$SitRecID <- paste0("cell_", as.character(outdat$cell)) # use cell # as absolute ID
+
+## re-merge in and out data
+netdat <- indat %>% mutate(cell = NA) %>% bind_rows(outdat) %>%
+  arrange(bird_id, timestamp)
+
+
+## Calculate number of consecutive days spent at a site -----------------------
+netdat <- as.data.table(netdat)
+if(datatype == "trax"){
+  netdat[, c("samesite","n_day"):=NULL] # remove cols
 }
 
-## again remove birds w/ only one sighting (to avoid unconnected nodes) -------
-##**WILL NEED TO ADD BACK IN TO MAKE COMPARISONS W/ OUTSIDE POINTS ##
+## id consecutive obs at a site/cell, per bird (data.table way)
+netdat[, samesite := data.table::rleid(SitRecID), by = bird_id]
+netdat$samesite <- ifelse(is.na(netdat$SitRecID), NA, netdat$samesite) # NA where site NA
+
+## number of consecutive days at a site
+netdat <- netdat %>%
+  group_by(bird_id, samesite) %>%
+  summarise(n_day = n_distinct(yday(timestamp))) %>%
+  left_join(netdat)
+
+## for tracking data, remove data from sites visited for < 48h
+if (datatype == "trax"){
+  netdat <- filter(netdat, n_day >= 2)
+}
+
+## check out some data
+# netdat %>% filter(bird_id == "B.tenskar") %>% 
+# netdat[5000:10000,] %>%
+#   sf::st_as_sf(
+#     coords = c("longitude", "latitude"),
+#     crs = 4326, agr = "constant") %>% mapview(zcol="SitRecID")
+
+## Remove any birds w/ only one sighting (to avoid unconnected nodes) ---------
 xz <- netdat %>% group_by(bird_id) %>% 
   summarise(nobs = n()) %>% filter(nobs == 1)
 netdat <- subset(netdat, !bird_id %in% xz$bird_id)
 
 ## remove birds only seen (multiple times) at same site ----------------------- 
-##**ALSO HERE WILL NEED TO ADD BACK IN TO MAKE COMPARISONS W/ OUTSIDE POINTS ##
 nsites <- netdat %>% group_by(bird_id) %>% 
-  summarise(nsites = n_distinct(site_poly))
+  summarise(nsites = n_distinct(SitRecID))
 
 ## % of birds w/ relocs at one site only
 sum(nsites$nsites == 1) / n_distinct(netdat$bird_id) * 100
@@ -142,27 +186,94 @@ sum(nsites$nsites == 1) / n_distinct(netdat$bird_id) * 100
 xz2 <- filter(nsites, nsites == 1)
 netdat <- subset(netdat, !bird_id %in% xz2$bird_id)
 
-## (local) numeric code of nodes/sites ------------------------------------------------
+## create (relative) numeric code for nodes/sites -----------------------------
 # netdat$loc_num <- as.numeric(as.factor(netdat$site_poly)) # name
 netdat$loc_num <- as.numeric(as.factor(netdat$SitRecID))  # (absolute) numeric
 
-# create reference table of sites w/ obs --------------------------------------
-site_cent <- readRDS( ## site centroids
+## split data again by in and out site to add cell center coords --------------
+outdat <- netdat %>% 
+  filter(site_poly == "none")
+indat <- netdat %>% 
+  filter(site_poly != "none")
+
+## one row per cell
+binned_re <- outdat %>% group_by(loc_num, cell) %>% 
+  summarise() # %>% summarise(
+# count=n(), 
+# n_birds = n_distinct(bird_id))
+
+## Get the grid cell boundaries for cells which had obs
+grid_re           <- dgcellstogrid(dggs, binned_re$cell)
+colnames(grid_re)[1] <- "cell"
+
+ccenters_re       <- dgSEQNUM_to_GEO(dggs, grid_re$cell)
+
+## interactive map of cell centers
+# cbind.data.frame(lat=ccenters_re$lat_deg, lon=ccenters_re$lon_deg) %>%
+#   sf::st_as_sf(
+#     coords = c("lon", "lat"),
+#     crs = 4326, agr = "constant") %>% mapview()
+
+### Update the grid cells' properties to include the number of obs in each cell
+# grid_re <- merge(grid_re, binned_re, by.x="cell", by.y="cell")
+# mapview(grid_re, zcol = "count")
+# mapview(grid_re, zcol = "n_birds")
+
+
+
+### Overlay relocations on cell group polygons --------------------------------
+
+
+
+
+## add cell center coordinates
+grid_re <- grid_re %>% st_drop_geometry() %>%
+  bind_cols(latitude=ccenters_re$lat_deg, longitude=ccenters_re$lon_deg)
+
+## merge w/ relocs for out data
+## DONT THINK THIS NEEDS TO HAPPEN ANYMORE
+# outdat <- outdat %>%
+#   dplyr::select(-latitude, -longitude) %>%
+#   left_join(grid_re, by="cell")
+
+
+
+## create reference table of sites w/ obs --------------------------------------
+## Out sites:
+out_cent <- outdat %>% group_by(SitRecID, cell) %>% 
+  st_as_sf(coords = c("longitude", "latitude"), 
+           crs = 4326, agr = "constant") %>% 
+  summarise() %>% 
+  dplyr::select(SitRecID, geometry)
+
+## centroids of site polygons
+site_cent <- readRDS( 
   "data/geodata/ibas/Africa_Europe_IBA/Africa_Europe_IBA_centroids.shp") 
 site_cent %<>% 
   mutate(SitRecID = as.character(SitRecID)) %>% 
   dplyr::select(SitRecID, geometry)
 
+## re-merge in and out data
+netdat <- indat %>% bind_rows(outdat) %>%
+  arrange(bird_id, timestamp)
+
+# create reference table of sites w/ obs --------------------------------------
+site_cent <- bind_rows(site_cent, out_cent)
+
 site_summ <- netdat %>% 
   group_by(loc_num, site_poly, SitRecID) %>% summarise() %>% 
   left_join(site_cent, by = c("SitRecID")) %>% st_as_sf()
+
+
+
+###---------------------------------------------------------------------------
+### network ------------------------------------------------------------------
 
 ## Edge list ------------------------------------------------------------------
 
 ## produce all combinations of sites visited by each individual
 netdat_list <- split(netdat, netdat$bird_id)
 
-tic()
 netdat_list <- lapply(
   seq_along(netdat_list), 
   function(x){
@@ -176,7 +287,6 @@ netdat_list <- lapply(
     xx$bird_id <- one$bird_id[1]
     return(xx)
   })
-toc()
 
 full <- data.table::rbindlist(netdat_list)
 
@@ -208,7 +318,6 @@ edgelist <- cbind(
   dplyr::select(from, to, n_id, prop_id) %>% 
   as_tibble()
 
-
 ## Vertex list ---------------------------------------------------------------
 if(datatype %in% c("color", "metal")){
   n_obstype <- netdat %>% 
@@ -235,7 +344,7 @@ if(datatype %in% c("color", "metal")){
 
 n_id_total <- n_distinct(netdat$bird_id)
 
-nodelist <- netdat %>% group_by(loc_num, SitRecID,) %>% 
+nodelist <- netdat %>% group_by(loc_num, SitRecID) %>% 
   summarise(
     n_id    = n_distinct(bird_id),
     prop_id = n_id / n_id_total,
@@ -245,6 +354,7 @@ nodelist <- netdat %>% group_by(loc_num, SitRecID,) %>%
 nodelist <- nodelist %>% 
   left_join(site_summ) %>% 
   sf::st_as_sf()
+
 
 ## Convert to sfnetwork -------------------------------------------------------
 
@@ -296,6 +406,7 @@ edgesf <- netsf %>% activate("edges") %>% sf::st_as_sf()
 # mapview::mapview(nodesf, zcol="between_norm")
 mapview::mapview(nodesf, zcol="degree_rank")
 # mapview::mapview(nodesf, zcol="btwn_rank")
+# mapview::mapview(edgesf) + mapview::mapview(nodesf)
 
 # mapview::mapview(nodesf, zcol="btwn_rank") 
 # mapview::mapview(nodesf, zcol="btwn_rank") +
@@ -304,5 +415,4 @@ mapview::mapview(nodesf, zcol="degree_rank")
 
 ## SAVE ##
 
-saveRDS(netsf, paste0("data/analysis/networks/", datatype,"_", season, "_iba10km_poly.rds"))
-
+# saveRDS(netsf, paste0("data/analysis/networks/", datatype,"_", season, "_iba10km_poly.rds"))

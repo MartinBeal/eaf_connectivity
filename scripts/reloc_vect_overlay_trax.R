@@ -1,13 +1,11 @@
 ### overlay bird locations on vector dataset of 'sites' (IBAs, Ramsar, PAs)
 ## and find closest site w/in a threshold distance
 # Also quantify # consec. days bird is at same site
-
+## ----------------------------------------------------------------------------
 
 pacman::p_load(dplyr, igraph, stringr, tictoc, ggplot2, data.table,
                sf, mapview, magrittr, lubridate)
 
-## ring recovery data
-# alldat <- readRDS("data/analysis/ringing/comb_euring_cring_no7dayreobs.rds")
 
 ## tracking data
 # alldat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h.rds")
@@ -20,6 +18,11 @@ alldat %<>% rename(bird_id = id)
 iba <- st_read("data/geodata/ibas/Africa_Europe_IBA/Africa_Europe_IBA.shp")
 
 iba %<>% st_make_valid() # deal with polygon invalidity
+
+## get centroids of sites for later use as nodes in the network
+iba_cent <- iba %>% st_centroid()
+
+saveRDS(iba_cent, "data/geodata/ibas/Africa_Europe_IBA/Africa_Europe_IBA_centroids.shp")
 
 ## small subset 
 # alldat <- head(alldat, 1000)

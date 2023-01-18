@@ -1,7 +1,27 @@
+## map data depending on whether it falls w/in known site layer or outside
+
+pacman::p_load(ggplot2)
+
+## Run through each data type -------------------------------------------------
+datatype <- "metal"
+# datatype <- "color"
+# datatype <- "trax"
+
+### Season -------------------------------------------------
+season <- "all"
+# season <- "spring"
+# season <- "fall"
+
+## load data
+outnet <- readRDS( ## out sites network
+  paste0("data/analysis/networks/", datatype,"_outside_", season, "_iba10km_poly.rds"))
+innet  <- readRDS( ## in sites network
+  paste0("data/analysis/networks/", datatype,"_", season, "_iba10km_poly.rds"))
+
 ## Combine in-site and out-site nodes
 
-outsite <- nodesf
-# insite  <- nodesf
+outsite <- outnet %>% activate("nodes") %>% sf::st_as_sf()
+insite  <- innet %>% activate("nodes") %>% sf::st_as_sf()
 
 outsite$loc <- paste0("o_", outsite$loc_num)
 insite$loc  <- paste0("i_", insite$loc_num)

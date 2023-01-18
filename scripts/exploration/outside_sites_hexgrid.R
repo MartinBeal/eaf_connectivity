@@ -3,48 +3,40 @@
 # Sites defined using hexgrid binning (i.e. coordinates binned into cells
 # of a certain size)
 
-
 pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2,
                sf, mapview, magrittr, lubridate, dggridR, data.table)
 
-
+### Data type
 # datatype <- "metal"
-datatype <- "color"
-# datatype <- "trax"
+# datatype <- "color"
+datatype <- "trax"
 
-
-if(datatype == "color"){
-  ## ring relocations overlaid on polygon layer
-  alldat <- readRDS("data/analysis/ringing/outside_ibas10km.rds") ## IBAs
-} else if (datatype == "metal"){
-  ## metal ring locations overlaid on polygon layer
-  alldat <- readRDS("data/analysis/ringing/") ## IBAs
-} else if (datatype == "trax"){
-  ## tracking locations overlaid on polygon layer
-  alldat <- readRDS("data/analysis/tracking/outside_PTT_GPS_ibas10km.rds") ## IBAs
-}
-
-# fxn for splitting string into columns
-source("C:/Users/Martim Bill/Documents/R/source_scripts/str2col.R")
-
-## choose data subset to run --------------------------------------------------
-
-## which network to create
+### Season
 season <- "all"
 # season <- "spring"
 # season <- "fall"
 
-# netdat <- subset(alldat, bird_id %in% unique(alldat$bird_id)[1:100])
-
-if(season == "all"){ ## year-round
-  netdat <- alldat ## all individuals
-} else { ## separate networks for fall and spring migration
-  alldat$season <- ifelse(month(alldat$timestamp) < 7, "spring", "fall")
-  netdat <- alldat[which(alldat$season == season), ]
+if(datatype == "color"){
+  ## ring relocations overlaid on polygon layer
+  alldat <- readRDS(
+    paste0("data/analysis/ringing/color_outside_", season, "_ibas10km.rds"))
+} else if (datatype == "metal"){
+  ## metal ring locations overlaid on polygon layer
+  alldat <- readRDS(
+    paste0("data/analysis/ringing/metal_outside_", season, "_ibas10km.rds"))
+} else if (datatype == "trax"){
+  ## tracking locations overlaid on polygon layer
+  alldat <- readRDS(
+    paste0("data/analysis/tracking/outside_trx_", season, "_ibas10km.rds"))
 }
+
+## fxn for splitting string into columns
+source("C:/Users/Martim Bill/Documents/R/source_scripts/str2col.R")
 
 
 ## Hexgrid --------------------------------------------------------------------
+
+netdat <- alldat ## all individuals
 
 ## Construct global grid with cells approximately 1000 miles across
 # dggs <- dgconstruct(spacing=8, resround='down')
@@ -85,7 +77,7 @@ if(datatype == "trax"){
 
 ## id consecutive obs at a site, per bird (data.table way)
 netdat[, samesite := data.table::rleid(cell),
-        by = bird_id]
+       by = bird_id]
 netdat$samesite <- ifelse(is.na(netdat$cell), NA, netdat$samesite) # NA where site NA
 
 ## number of consecutive days at a site
@@ -94,9 +86,9 @@ netdat <- netdat %>%
   summarise(n_day = n_distinct(yday(timestamp))) %>%
   left_join(netdat)
 
-## for tracking data, remove cells visited for <= 24h
+## for tracking data, remove cells visited for < 48h
 if (datatype == "trax"){
-  netdat <- filter(netdat, n_day > 1)
+  netdat <- filter(netdat, n_day >= 2)
 }
 
 
@@ -165,7 +157,7 @@ edgelist <- cbind(
 
 
 ## Vertex list ---------------------------------------------------------------
-if(datatype == "ring"){
+if(datatype %in% c("color", "metal")){
   n_obstype <- netdat %>%
     group_by(loc_num, obstype) %>%
     summarise(
@@ -195,9 +187,10 @@ nodelist <- netdat %>% group_by(loc_num) %>%
   ) %>% right_join(n_obstype)
 
 nodelist <- nodelist %>%
-  left_join(site_summ) %>%
+  left_join(site_summ, by="loc_num") %>%
   sf::st_as_sf(coords = c("longitude", "latitude"),
                crs = 4326, agr = "constant")
+
 
 ## Convert to sfnetwork -------------------------------------------------------
 
@@ -224,82 +217,16 @@ nodesf <- netsf %>% activate("nodes") %>% sf::st_as_sf()
 mapview::mapview(nodesf, zcol="n_id")
 
 
-## Static map: project for prettier map --------------------------------------
-library(rworldmap)
-# get world map
-wmap <- getMap(resolution="high")
+## SAVE ## 
 
-## Lambert EA: EPSG:3035 ## Lambert CConic: EPSG:3034
-wmap_prj <- st_as_sf(wmap) %>% st_transform(crs = "EPSG:3035")
-edge_prj <- st_as_sf(netsf, "edges") %>% st_transform(crs = "EPSG:3035")
-node_prj <- st_as_sf(netsf, "nodes") %>% st_transform("EPSG:3035")
-# bbox_prj <- st_bbox(edge_prj)
-bbox_prj <- st_bbox(
-  c(xmin = -16, xmax = 21,
-    ymin = 8, ymax = 65.2), crs = 4326) %>%
-  st_as_sfc() %>% st_transform("EPSG:3035") %>% st_bbox()
+if(datatype == "color"){
+  saveRDS(netsf, 
+          paste0("data/analysis/networks/color_outside_", season, "_iba10km_poly.rds"))
+} else if (datatype == "metal"){
+  saveRDS(netsf, 
+          paste0("data/analysis/networks/metal_outside_", season, "_iba10km_poly.rds"))
+} else if (datatype == "trax"){
+  saveRDS(netsf, 
+          paste0("data/analysis/networks/trax_outside_", season, "_iba10km_poly.rds"))
+}
 
-###
-map <- ggplot() +
-  geom_sf(data = wmap_prj, fill = "grey70", color = NA) +
-  # geom_sf(data = edge_prj,
-  #         aes(size = n_id), col = "black") + #, alpha = 0.65
-  geom_sf(data = wmap_prj, fill = NA, color = "white", size=0.2) +
-  geom_sf(data = arrange(node_prj, n_id),
-          aes(col = n_id)) +
-  coord_sf(xlim =
-             c(bbox_prj[1], bbox_prj[3]), ylim = c(bbox_prj[2], bbox_prj[4]),
-           expand = T) +
-  scale_size(range = c(0.01, 2)) +
-  # theme_void() +
-  theme(
-    plot.background = element_rect(fill = "white"),
-    panel.background = element_rect(fill = "white"),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-    panel.border = element_rect(colour = "black", fill=NA, size=.5),
-    legend.key=element_blank()
-  )
-
-
-## SAVE map -------------------------------------------------------------------
-
-ggsave(paste0("figures/", datatype,"_", season, "_outside_iba10kmX.png.png"),
-     plot=map, width=5, height = 6)
-
-
-#
-# ## combine map w/ ebird areas w/ BTGO sightings -------------------------------
-# # cit sci grid
-# grid_cs <- readRDS("data/analysis/site_hexgrid_ebirdobs_87km.rds")
-# # grid_cs_prj <- st_as_sf(grid_cs) %>% st_transform(crs = "EPSG:3035")
-#
-#
-# ###
-# map2 <- ggplot() +
-#   geom_sf(data = wmap_prj, fill = "grey70", color = NA) +
-#   geom_sf(data = grid_cs,
-#           aes(fill = count), color=NA) +
-#   # geom_sf(data = edge_prj,
-#   #         aes(size = n_id), color = "black") + #, alpha = 0.65
-#   geom_sf(data = wmap_prj, fill = NA, color = "white", size=0.2) +
-#   geom_sf(data = node_prj,
-#           color="red", size=.5) +
-#   coord_sf(xlim =
-#              c(bbox_prj[1], bbox_prj[3]), ylim = c(bbox_prj[2], bbox_prj[4]),
-#            expand = T) +
-#   scale_size(range = c(0.01, 2)) +
-#   # theme_void() +
-#   theme(
-#     plot.background = element_rect(fill = "white"),
-#     panel.background = element_rect(fill = "white"),
-#     axis.text = element_blank(),
-#     axis.ticks = element_blank(),
-#     panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-#     panel.border = element_rect(colour = "black", fill=NA, size=.5),
-#     legend.key=element_blank()
-#   )
-#
-# # ggsave(paste0("figures/", season, "_ring_hex87km_citscisitesX.png"), plot=map2, width=5, height = 6)
-# ggsave(paste0("figures/", season, "_ring_hex87km_citscisitesX.png"), plot=map2, width=5, height = 6)

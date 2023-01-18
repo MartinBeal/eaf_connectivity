@@ -28,7 +28,7 @@ pacman::p_unload(plyr)
 pacman::p_load(dplyr, magrittr, stringr, sf, ggplot2)
 
 ## tracking data
-TD <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h.rds")
+TD <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0.rds")
 
 firsts <- TD %>%
   arrange(id, timestamp) %>% 

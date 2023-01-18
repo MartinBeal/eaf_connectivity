@@ -1,6 +1,6 @@
 ## Combine GPS/PTT tracking data, speed filter, re-sample ---------------------
 
-pacman::p_load(trip, dplyr, sf, amt, mapview)
+pacman::p_load(trip, dplyr, sf, amt, mapview, magrittr)
 
 dg  <- readRDS("data/analysis/tracking/Dutch_German_trx_clean.rds")
 isl <- readRDS("data/analysis/tracking/Alves_trx_clean.rds")
@@ -80,22 +80,28 @@ trx <- trx[-which(first2rmv), ]
 
 ### visualize
 ## first points 
-# trx %>% 
+# trx %>%
 #   group_by(ID) %>%
 #   filter(argos_lc %in% c("G", "1", "2", "3", "g")) %>% # only high precision
-#   slice(1) %>% 
+#   slice(1) %>%
 #   sf::st_as_sf(coords = c("longitude", "latitude"),
-#                crs = 4326, agr = "constant") %>% 
+#                crs = 4326, agr = "constant") %>%
 #   mapview()
 
 # mapview(head(trx, 10000), zcol = "mcfilter")
 # mapview(tail(trx, 10000), zcol = "mcfilter")
 # mapview(subset(trx, study_name == "Black-tailed Godwits Extremadura (Lotek)"), 
 #         zcol = "mcfilter")
-# trx %>% filter(ID == "Leziria") %>% 
-#   sf::st_as_sf(coords = c("longitude", "latitude"),
-#                crs = 4326, agr = "constant") %>%
-#   mapview::mapview()
+trx %>% filter(ID == "Cubilar") %>%
+  sf::st_as_sf(coords = c("longitude", "latitude"),
+               crs = 4326, agr = "constant") %>%
+  mapview::mapview()
+
+trx %>% filter(longitude > 10.8) %>% 
+  sf::st_as_sf(coords = c("longitude", "latitude"),
+               crs = 4326, agr = "constant") %>%
+  mapview::mapview()
+
 
 ## filter -----------
 trx_f <- as.data.frame(subset(trx, mcfilter == TRUE))
