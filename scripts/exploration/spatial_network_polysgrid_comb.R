@@ -186,9 +186,10 @@ sum(nsites$nsites == 1) / n_distinct(netdat$bird_id) * 100
 xz2 <- filter(nsites, nsites == 1)
 netdat <- subset(netdat, !bird_id %in% xz2$bird_id)
 
+### DOUBLE CHECK THAT THIS STEP IS NEEDED HERE OR IF ONLY LATER WORKS
 ## create (relative) numeric code for nodes/sites -----------------------------
 # netdat$loc_num <- as.numeric(as.factor(netdat$site_poly)) # name
-netdat$loc_num <- as.numeric(as.factor(netdat$SitRecID))  # (absolute) numeric
+# netdat$loc_num <- as.numeric(as.factor(netdat$SitRecID))  # (absolute) numeric
 
 ## split data again by in and out site to add cell center coords --------------
 outdat <- netdat %>% 
@@ -197,7 +198,7 @@ indat <- netdat %>%
   filter(site_poly != "none")
 
 ## one row per cell
-binned_re <- outdat %>% group_by(loc_num, cell) %>% 
+binned_re <- outdat %>% group_by(SitRecID, cell) %>% 
   summarise() # %>% summarise(
 # count=n(), 
 # n_birds = n_distinct(bird_id))
@@ -220,31 +221,86 @@ ccenters_re       <- dgSEQNUM_to_GEO(dggs, grid_re$cell)
 # mapview(grid_re, zcol = "n_birds")
 
 
+## ----------------------------------------------------------------------------
+## Group neighbouring hexcells into 'sites' -----------------------------------
+
+## solution found here:
+## https://gis.stackexchange.com/questions/323038/dissolve-only-overlapping-polygons-in-r-using-sf
+
+## union intersecting polygons into combined polygon
+parts <- st_cast(st_union(grid_re),"POLYGON")
+plot(parts)
+
+## identify which 'part' each cell polygon intersects
+cellgrp <- unlist(st_intersects(grid_re, parts))
+
+## union cell polygons by their cellgroup membership + paste cell numbers
+grid_re2 <- cbind(grid_re, cellgrp) %>%
+  group_by(cellgrp) %>%
+  summarize(
+    cell = paste(cell, collapse = ", ")
+  )
+
+mapview(grid_re2)
+
+## centroid of cell group polygon
+ccenters_re <- st_centroid(grid_re2) %>% 
+  dplyr::mutate(lon_deg = sf::st_coordinates(.)[,1],
+                lat_deg = sf::st_coordinates(.)[,2])
+
+## interactive map of cell centers
+# cbind.data.frame(lat=ccenters_re$lat_deg, lon=ccenters_re$lon_deg) %>%
+#   sf::st_as_sf(
+#     coords = c("lon", "lat"),
+#     crs = 4326, agr = "constant") %>% mapview()
+
+### Update the grid cells' properties to include the number of obs in each cell
+# grid_re2 <- merge(grid_re2, binned_re, by.x="cell", by.y="cell")
+# mapview(grid_re, zcol = "count")
+# mapview(grid_re, zcol = "n_birds")
+
+## add cell center coordinates
+grid_re2 <- grid_re2 %>% 
+  bind_cols(latitude=ccenters_re$lat_deg, longitude=ccenters_re$lon_deg)
+
 
 ### Overlay relocations on cell group polygons --------------------------------
 
+outdat %<>% sf::st_as_sf(
+  coords = c("longitude", "latitude"),
+  crs = 4326, agr = "constant")
 
+ov <- sapply(
+  st_intersects(outdat, grid_re2),
+  function(x){
+    if(length(x) == 0){x <- 'none'}
+    return(x[1])
+  })
 
+grid_re2$rowid <- 1:nrow(grid_re2)
 
-## add cell center coordinates
-grid_re <- grid_re %>% st_drop_geometry() %>%
-  bind_cols(latitude=ccenters_re$lat_deg, longitude=ccenters_re$lon_deg)
+## combine site info with overlap result
+pntscellgrps <- left_join(data.frame(rowid = ov), st_drop_geometry(grid_re2))
 
-## merge w/ relocs for out data
-## DONT THINK THIS NEEDS TO HAPPEN ANYMORE
-# outdat <- outdat %>%
-#   dplyr::select(-latitude, -longitude) %>%
-#   left_join(grid_re, by="cell")
-
-
+## combine overlap result back into bird locations w/ cellgroup info
+outdat <- bind_cols(outdat, pntscellgrps[,c("cellgrp", "cell")]) %>% 
+  mutate(
+    cellgrp = paste0("cellgrp_", cellgrp),
+    SitRecID = cellgrp ## make the cell group the main site ID
+  )
 
 ## create reference table of sites w/ obs --------------------------------------
-## Out sites:
-out_cent <- outdat %>% group_by(SitRecID, cell) %>% 
+## Out site centroids:
+out_cent <- ccenters_re %>% 
+  mutate(
+    cellgrp = paste0("cellgrp_", cellgrp),
+    SitRecID = cellgrp ## make the cell group the main site ID
+  ) %>% group_by(SitRecID, cellgrp) %>% 
   st_as_sf(coords = c("longitude", "latitude"), 
            crs = 4326, agr = "constant") %>% 
   summarise() %>% 
   dplyr::select(SitRecID, geometry)
+
 
 ## centroids of site polygons
 site_cent <- readRDS( 
@@ -254,20 +310,23 @@ site_cent %<>%
   dplyr::select(SitRecID, geometry)
 
 ## re-merge in and out data
-netdat <- indat %>% bind_rows(outdat) %>%
+netdat <- outdat %>% st_drop_geometry() %>% bind_rows(indat) %>%
   arrange(bird_id, timestamp)
 
 # create reference table of sites w/ obs --------------------------------------
 site_cent <- bind_rows(site_cent, out_cent)
 
 site_summ <- netdat %>% 
-  group_by(loc_num, site_poly, SitRecID) %>% summarise() %>% 
+  group_by(site_poly, SitRecID) %>% summarise() %>% 
   left_join(site_cent, by = c("SitRecID")) %>% st_as_sf()
-
 
 
 ###---------------------------------------------------------------------------
 ### network ------------------------------------------------------------------
+
+## create (relative) numeric code for nodes/sites -----------------------------
+# netdat$loc_num <- as.numeric(as.factor(netdat$site_poly)) # name
+netdat$loc_num <- as.numeric(as.factor(netdat$SitRecID))  # (absolute) numeric
 
 ## Edge list ------------------------------------------------------------------
 
@@ -404,9 +463,9 @@ edgesf <- netsf %>% activate("edges") %>% sf::st_as_sf()
 # mapview::mapview(nodesf, zcol="between")
 # mapview::mapview(nodesf, zcol="degree")
 # mapview::mapview(nodesf, zcol="between_norm")
-mapview::mapview(nodesf, zcol="degree_rank")
+# mapview::mapview(nodesf, zcol="degree_rank")
 # mapview::mapview(nodesf, zcol="btwn_rank")
-# mapview::mapview(edgesf) + mapview::mapview(nodesf)
+mapview::mapview(edgesf) + mapview::mapview(nodesf)
 
 # mapview::mapview(nodesf, zcol="btwn_rank") 
 # mapview::mapview(nodesf, zcol="btwn_rank") +
