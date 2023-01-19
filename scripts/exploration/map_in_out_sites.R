@@ -3,9 +3,9 @@
 pacman::p_load(ggplot2)
 
 ## Run through each data type -------------------------------------------------
-datatype <- "metal"
+# datatype <- "metal"
 # datatype <- "color"
-# datatype <- "trax"
+datatype <- "trax"
 
 ### Season -------------------------------------------------
 season <- "all"
@@ -13,27 +13,17 @@ season <- "all"
 # season <- "fall"
 
 ## load data
-outnet <- readRDS( ## out sites network
-  paste0("data/analysis/networks/", datatype,"_outside_", season, "_iba10km_poly.rds"))
-innet  <- readRDS( ## in sites network
-  paste0("data/analysis/networks/", datatype,"_", season, "_iba10km_poly.rds"))
+net <- readRDS( ## out sites network
+  paste0("data/analysis/networks/", datatype, "_", season, "_iba_hex_10km.rds")
+)
 
 ## Combine in-site and out-site nodes
 
-outsite <- outnet %>% activate("nodes") %>% sf::st_as_sf()
-insite  <- innet %>% activate("nodes") %>% sf::st_as_sf()
+allsites <- net %>% activate("nodes") %>% sf::st_as_sf()
 
-outsite$loc <- paste0("o_", outsite$loc_num)
-insite$loc  <- paste0("i_", insite$loc_num)
+allsites <- allsites[,c("site_type", "loc_num", "n_id", "n_obs", "geometry")]
 
-outsite$inout <- "out"
-insite$inout  <- "in"
-
-allsites <- bind_rows(
-  outsite[,c("loc", "inout", "loc_num", "n_id", "n_obs", "geometry")],
-  insite[,c("loc", "inout", "loc_num", "n_id", "n_obs", "geometry")])
-
-allsites %>% mapview::mapview(zcol="inout")
+allsites %>% mapview::mapview(zcol="site_type")
 
 
 ## Static map: project for prettier map --------------------------------------
@@ -58,7 +48,7 @@ map <- ggplot() +
   #         aes(size = n_id), col = "black") + #, alpha = 0.65
   geom_sf(data = wmap_prj, fill = NA, color = "white", size=0.2) +
   geom_sf(data = arrange(node_prj, n_id), 
-          aes(col = inout), alpha = .5) +
+          aes(col = site_type), alpha = .5) +
   coord_sf(xlim = 
              c(bbox_prj[1], bbox_prj[3]), ylim = c(bbox_prj[2], bbox_prj[4]), 
            expand = T) +
@@ -75,5 +65,5 @@ map <- ggplot() +
 # map
 
 ## SAVE ---------------------------------------------------------------------
-ggsave(paste0("figures/", datatype,"_", season, "_inandout_iba10kmX.png.png"),
+ggsave(paste0("figures/", datatype,"_", season, "_inandout_iba_hex_10km.png"),
        plot=map, width=5, height = 6)
