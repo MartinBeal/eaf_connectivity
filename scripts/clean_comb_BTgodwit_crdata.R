@@ -400,6 +400,9 @@ alldat %<>% filter(!is.na(latitude))
 alldat %<>% filter(!is.na(longitude))
 sum(is.na(alldat$latitude))
 
+sum(alldat$latitude > 99)
+
+
 
 ## create bird_id -------------------------------------------------------------
 ## make bird id cr unless missin, then use metal 

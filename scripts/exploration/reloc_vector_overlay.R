@@ -4,8 +4,8 @@
 pacman::p_load(dplyr, igraph, stringr, tictoc, ggplot2, 
                sf, mapview, magrittr, lubridate)
 
-datatype <- "metal"
-# datatype <- "color"
+# datatype <- "metal"
+datatype <- "color"
 
 if(datatype == "color"){
   ## ring relocations overlaid on polygon layer

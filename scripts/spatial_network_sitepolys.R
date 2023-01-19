@@ -7,8 +7,8 @@ pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2,
 
 ## Run through each data type -------------------------------------------------
 # datatype <- "metal"
-# datatype <- "color"
-datatype <- "trax"
+datatype <- "color"
+# datatype <- "trax"
 
 if(datatype == "color"){
   ## color ringed bird captures and resightings overlaid on polygon layer
