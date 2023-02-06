@@ -4,8 +4,8 @@
 pacman::p_load(dplyr, igraph, stringr, tictoc, ggplot2, 
                sf, mapview, magrittr, lubridate)
 
-# datatype <- "metal"
-datatype <- "color"
+datatype <- "metal"
+# datatype <- "color"
 
 if(datatype == "color"){
   ## ring relocations overlaid on polygon layer
@@ -140,6 +140,9 @@ alldat2 %<>% mutate(
 # mapview(subset(iba, IntName == "Tejo estuary")) + (alldat2 %>% filter(IntName == "none") %>% st_as_sf(
 #   coords = c("longitude", "latitude"), 
 #   crs = 4326) %>% mapview())
+
+## rename
+alldat2 %<>% rename(site_poly = IntName) ## IBAs only
 
 ## SAVE -----------------------------------------------------------------------
 

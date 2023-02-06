@@ -86,7 +86,7 @@ netdat <- netdat %>%
   summarise(n_day = n_distinct(yday(timestamp))) %>%
   left_join(netdat)
 
-## for tracking data, remove cells visited for < 48h
+## for tracking data, data outside cells visited for < 48h
 if (datatype == "trax"){
   netdat <- filter(netdat, n_day >= 2)
 }

@@ -377,6 +377,9 @@ alldat %<>% bind_rows(dutch2)
 uk2 <- readRDS("data/analysis/ringing/uk_INicholson_clean.rds")
 alldat %<>% bind_rows(uk2)
 
+## Lower Saxony data - H Lemke
+gls <- readRDS("data/analysis/ringing/germany_HLemke_clean.rds")
+alldat %<>% bind_rows(gls)
 
 ## Convert cr-schemes into countries
 crschemes <- read.csv("data/color/scheme_countries.csv")

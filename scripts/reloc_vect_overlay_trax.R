@@ -167,9 +167,12 @@ alldat2 <- alldat2 %>%
 #   coords = c("longitude", "latitude"),
 #   crs = 4326) %>% mapview()
 
-# alldat2 %>% filter(bird_id == "R\xfcschke") %>% 
-#   st_as_sf(coords = c("longitude", "latitude"), 
+# alldat2 %>% filter(bird_id == "R\xfcschke") %>%
+#   st_as_sf(coords = c("longitude", "latitude"),
 #            crs = 4326, agr = "constant") %>% mapview()
+
+## rename
+alldat2 %<>% rename(site_poly = IntName) ## IBAs only
 
 ## SAVE -----------------------------------------------------------------------
 

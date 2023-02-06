@@ -164,6 +164,7 @@ trk2 %<>% dplyr::rename(
   device = sensor_type, age = ageatrelease) %>% dplyr::select(-burst_) %>% 
   as_tibble()
 
+
 ## SAVE ## --------------------------------------------------------------------
 
 # saveRDS(trk2, "data/analysis/tracking/PTT_GPS_mconn_12h.rds")

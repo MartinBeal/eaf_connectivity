@@ -1,20 +1,29 @@
 ### Compare distributions of edge distances between data types ----------------
 ## NEED TO DO THIS FOR NODES COMMON TO BOTH NETWORKS
 
-pacman::p_load(sfnetworks, dplyr, sf, mapview)
+pacman::p_load(sfnetworks, dplyr, sf, mapview, units)
 
 ### Season -------------------------------------------------
-# season <- "all"
-season <- "spring"
+season <- "all"
+# season <- "spring"
 # season <- "fall"
 
 ## load data
+# only IBAs as sites
+# trxnet  <- readRDS( ## in sites network
+#   paste0("data/analysis/networks/trax_", season, "_iba10km_poly.rds"))
+# colnet  <- readRDS( ## in sites network
+#   paste0("data/analysis/networks/color_", season, "_iba10km_poly.rds"))
+# metnet  <- readRDS( ## in sites network
+#   paste0("data/analysis/networks/metal_", season, "_iba10km_poly.rds"))
+
+# IBAs and outside sites
 trxnet  <- readRDS( ## in sites network
-  paste0("data/analysis/networks/trax_", season, "_iba10km_poly.rds"))
+  paste0("data/analysis/networks/trax_", season, "_iba_hex_10km.rds"))
 colnet  <- readRDS( ## in sites network
-  paste0("data/analysis/networks/color_", season, "_iba10km_poly.rds"))
+  paste0("data/analysis/networks/color_", season, "_iba_hex_10km.rds"))
 metnet  <- readRDS( ## in sites network
-  paste0("data/analysis/networks/metal_", season, "_iba10km_poly.rds"))
+  paste0("data/analysis/networks/metal_", season, "_iba_hex_10km.rds"))
 
 ## nodes
 trxnodes <- trxnet %>% activate("nodes") %>% st_as_sf()
@@ -36,12 +45,12 @@ msharenet <- st_filter(activate(metnet, "nodes"), activate(trxnet, "nodes"))
 tsharenet %<>% activate("edges") %>% mutate(
   edge_len = set_units(edge_length(), km)
   # edge_displ  = edge_displacement()
-  )
+)
 
 csharenet %<>% activate("edges") %>% mutate(
   edge_len = set_units(edge_length(), km)
   # edge_displ  = edge_displacement()
-  )
+)
 
 ## convert edges to sf 
 trxedges <- tsharenet %>% activate("edges") %>% st_as_sf() %>% 
@@ -76,7 +85,7 @@ ggplot() +
     show.legend = FALSE) +
   theme_bw()
 
-ggsave("figures/edge_length_datatype.png", width=5, height=6)
+ggsave("figures/edge_length_datatype_iba_hex_10km.png", width=5, height=6)
 
 
 ## All three data types -------------------------------------------------------
@@ -130,8 +139,7 @@ edge_summ2 <- combedges2 %>%
   )
 edge_summ2
 
-write.csv(edge_summ2, "data/analysis/summaries/compare_edge_length_alldatatypes.csv", row.names = F)
-
+write.csv(edge_summ2, "data/analysis/summaries/compare_edge_length_alldatatypes_iba_hex_10km.csv", row.names = F)
 
 ## data highly non-normal
 m2 <- lm(combedges2$edge_len ~ combedges2$datatype)
@@ -145,20 +153,20 @@ ggplot() +
     show.legend = FALSE) +
   theme_bw()
 
-ggsave("figures/edge_length_datatype_alldatatypes.png", width=5, height=6)
+ggsave("figures/edge_length_datatype_alldatatypes_iba_hex_10km.png", width=5, height=6)
 
 
 ## compare basic maps --------------------------------------------------------
 
-trxmap <- ggplot() + geom_sf(data = trxedges2, aes()) + theme_void() +
+trxmap <- ggplot() + geom_sf(data = trxedges2, aes(), alpha=0.4) + theme_void() +
   ggtitle("Tracking")
-colmap <- ggplot() + geom_sf(data = coledges2, aes()) + theme_void() +
+colmap <- ggplot() + geom_sf(data = coledges2, aes(), alpha=0.4) + theme_void() +
   ggtitle("Color")
-metmap <- ggplot() + geom_sf(data = metedges2, aes()) + theme_void() +
+metmap <- ggplot() + geom_sf(data = metedges2, aes(), alpha=0.4) + theme_void() +
   ggtitle("Metal")
 
 library(patchwork)
 
-combmap <- trxmap + colmap + metmap
+combmap <- colmap + metmap + trxmap
 
-ggsave("figures/networks/compare_edges_shrdnodes.png", height=5, width=8)
+ggsave("figures/networks/compare_edges_shrdnodes.png_iba_hex_10km.png", height=5, width=8)

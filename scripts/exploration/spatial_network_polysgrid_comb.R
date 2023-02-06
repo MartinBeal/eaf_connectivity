@@ -106,14 +106,13 @@ netdat %<>% rename(site_poly = IntName) ## IBAs only
 ##@ Create hexgrid cell 'sites' for points falling outside known site layer ---
 ## separate locations falling outside any site polygon
 outdat  <- filter(netdat, site_poly == "none")
-indat  <- filter(netdat, site_poly != "none")
+indat   <- filter(netdat, site_poly != "none")
 
 ## filter to only obs w/in sites (and for trax, only site visits >= 2 days)
 # if(datatype == "color"){
 #   saveRDS(
 #     outdat, 
 #     paste0("data/analysis/ringing/color_outside_", season, "_ibas10km.rds"))
-# } else if (datatype == "metal"){
 #   saveRDS(
 #     outdat, 
 #     paste0("data/analysis/ringing/metal_outside_", season, "_ibas10km.rds"))
@@ -161,8 +160,8 @@ if(datatype == "trax"){
   netdat <- filter(netdat, n_day >= 2)
 }
 
-## check out some data
-# netdat %>% filter(bird_id == "B.tenskar") %>% 
+# check out some data
+# netdat %>% filter(bird_id == "B.tenskar") %>%
 # netdat[5000:10000,] %>%
 #   sf::st_as_sf(
 #     coords = c("longitude", "latitude"),
@@ -175,7 +174,9 @@ netdat <- subset(netdat, !bird_id %in% xz$bird_id)
 
 ## remove birds only seen (multiple times) at same site ----------------------- 
 nsites <- netdat %>% group_by(bird_id) %>% 
-  summarise(nsites = n_distinct(SitRecID))
+  summarise(
+    nsites = n_distinct(SitRecID),
+    SitRecIDs = paste(unique(SitRecID), collapse = ", "))
 
 ## % of birds w/ relocs at one site only
 sum(nsites$nsites == 1) / n_distinct(netdat$bird_id) * 100
@@ -183,10 +184,6 @@ sum(nsites$nsites == 1) / n_distinct(netdat$bird_id) * 100
 xz2 <- filter(nsites, nsites == 1)
 netdat <- subset(netdat, !bird_id %in% xz2$bird_id)
 
-### DOUBLE CHECK THAT THIS STEP IS NEEDED HERE OR IF ONLY LATER WORKS
-## create (relative) numeric code for nodes/sites -----------------------------
-# netdat$loc_num <- as.numeric(as.factor(netdat$site_poly)) # name
-# netdat$loc_num <- as.numeric(as.factor(netdat$SitRecID))  # (absolute) numeric
 
 ## split data again by in and out site to add cell center coords --------------
 outdat <- netdat %>% 
@@ -321,8 +318,14 @@ site_summ <- netdat %>%
 site_summ %>% mapview(zcol="site_type")
 
 
+
 ###---------------------------------------------------------------------------
 ### network ------------------------------------------------------------------
+###---------------------------------------------------------------------------
+
+## number of birds filtered out
+n_distinct(alldat$bird_id)
+n_distinct(netdat$bird_id)
 
 ## create (relative) numeric code for nodes/sites -----------------------------
 # netdat$loc_num <- as.numeric(as.factor(netdat$site_poly)) # name
@@ -462,7 +465,7 @@ edgesf <- netsf %>% activate("edges") %>% sf::st_as_sf()
 # mapview::mapview(nodesf, zcol="between_norm")
 # mapview::mapview(nodesf, zcol="degree_rank")
 # mapview::mapview(nodesf, zcol="btwn_rank")
-# mapview::mapview(edgesf) + mapview::mapview(nodesf)
+mapview::mapview(edgesf) + mapview::mapview(nodesf)
 
 # mapview::mapview(nodesf, zcol="btwn_rank") 
 # mapview::mapview(nodesf, zcol="btwn_rank") +

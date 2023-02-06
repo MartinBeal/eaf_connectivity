@@ -1,13 +1,13 @@
 ### Map individual relocation data vs network for checking results etc.
 
 pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2, 
-               sf, mapview, magrittr, lubridate, netrankr)
+               sf, mapview, magrittr, lubridate, netrankr, dggridR, data.table)
 
 
 ## Run through each data type -------------------------------------------------
 # datatype <- "metal"
-# datatype <- "color"
-datatype <- "trax"
+datatype <- "color"
+# datatype <- "trax"
 
 if(datatype == "color"){
   ## color ringed bird captures and resightings overlaid on polygon layer
@@ -29,9 +29,6 @@ source("C:/Users/Martim Bill/Documents/R/source_scripts/str2col.R")
 # fxn for calc. displacement distance from first tracking locations
 source("C:/Users/Martim Bill/Documents/R/source_scripts/displ_dist.R")
 
-# alldat %<>% rename(combo = metal)
-# alldat %<>% filter(obssource == "euring") # which data sources
-# alldat %<>% filter(obssource != "euring")
 
 ## choose data subset to run --------------------------------------------------
 
@@ -61,7 +58,7 @@ if(datatype == "trax"){
   ## add column of diplacement distance from first location 
   netdat <- displ_dist(netdat)
   
-  ## Summarise max/avg distance from first points -------------------------------
+  ## Summarise max/avg distance from first points -----------------------------
   
   displ_id <- netdat %>% group_by(id) %>% 
     summarise(
@@ -87,18 +84,24 @@ if(datatype == "trax"){
 
 n_ids <- n_distinct(netdat$bird_id)
 
+## centroids of IBA polygons
+site_cent <- readRDS( 
+  "data/geodata/ibas/Africa_Europe_IBA/Africa_Europe_IBA_centroids.shp") 
 
-for(i in seq_len(n_ids)){
+if(datatype == "trax"){
+  idxs <- seq_len(n_ids)
+} else {
+  idxs <- 1:300
+}
+# for(i in seq_len(n_ids)){
+for(i in idxs){
+  
   print(i)
   
   oneid <- filter(netdat, bird_id == unique(netdat$bird_id)[i])
   
-  ## show data from a certain place
-  # netdat <- subset(netdat, bird_id %in% unique(alldat$bird_id)[1:100])
-  # netdat2 <- subset(netdat2, scheme_country == "Iceland")
-  
   ## top sites visited
-  # xx <- netdat2 %>% group_by(SitRecID, IntName, country) %>% 
+  # xx <- oneid2 %>% group_by(SitRecID, IntName, country) %>% 
   #   summarise(
   #     n_birds = n_distinct(bird_id),
   #     n_obs   = n()
@@ -109,74 +112,221 @@ for(i in seq_len(n_ids)){
   ## 
   oneid %<>% rename(site_poly = IntName) ## IBAs only
   
+  ## split data by in and outside of IBA
+  outdat  <- filter(oneid, site_poly == "none")
+  indat  <- filter(oneid, site_poly != "none")
+  
+  ## Hexgrid --------------------------------------------------------------------
+  
+  ## Construct global grid with cells approximately 10 km across
+  # dggs <- dgconstruct(spacing=8, resround='down')
+  dggs <- dgconstruct(spacing=10, resround='down')
+  
+  ## extract cell # for each relocation
+  outdat$cell <- dgGEO_to_SEQNUM(
+    dggs, outdat$longitude, outdat$latitude)$seqnum
+  
+  outdat$SitRecID <- paste0("cell_", as.character(outdat$cell)) # use cell # as absolute ID
+  
+  ## re-merge in and out data
+  oneid <- indat %>% mutate(cell = NA) %>% bind_rows(outdat) %>%
+    arrange(bird_id, timestamp)
+  
+  
+  ## Calculate number of consecutive days spent at a site -----------------------
+  oneid <- as.data.table(oneid)
+  
+  if(datatype == "trax"){
+    oneid[, c("samesite","n_day"):=NULL] # remove cols
+    
+    ## id consecutive obs at a site/cell, per bird (data.table way)
+    oneid[, samesite := data.table::rleid(SitRecID), by = bird_id]
+    oneid$samesite <- ifelse(is.na(oneid$SitRecID), NA, oneid$samesite) # NA where site NA
+    
+    ## number of consecutive days at a site
+    oneid <- oneid %>%
+      group_by(bird_id, samesite) %>%
+      summarise(n_day = n_distinct(yday(timestamp))) %>%
+      left_join(oneid)
+    
+    ## for tracking data, remove data from sites visited for < 48h
+    oneid <- filter(oneid, n_day >= 2)
+  }
+  
+  ## check out some data
+  # oneid %>% filter(bird_id == "B.tenskar") %>% 
+  # oneid[5000:10000,] %>%
+  #   sf::st_as_sf(
+  #     coords = c("longitude", "latitude"),
+  #     crs = 4326, agr = "constant") %>% mapview(zcol="SitRecID")
+  
+  ## split data again by in and out site to add cell center coords --------------
+  outdat <- oneid %>% 
+    filter(site_poly == "none")
+  indat <- oneid %>% 
+    filter(site_poly != "none")
+  
+  ## SKip if ind has no points outside IBAs -----------------------------------
+  if(nrow(outdat) > 0){
+    ## one row per cell
+    binned_re <- outdat %>% group_by(SitRecID, cell) %>% 
+      summarise() # %>% summarise(
+    # count=n(), 
+    # n_birds = n_distinct(bird_id))
+    
+    ## Get the grid cell boundaries for cells which had obs
+    grid_re           <- dgcellstogrid(dggs, binned_re$cell)
+    colnames(grid_re)[1] <- "cell"
+    
+    ## interactive map of cell centers
+    # cbind.data.frame(lat=ccenters_re$lat_deg, lon=ccenters_re$lon_deg) %>%
+    #   sf::st_as_sf(
+    #     coords = c("lon", "lat"),
+    #     crs = 4326, agr = "constant") %>% mapview()
+    
+    ### Update the grid cells' properties to include the number of obs in each cell
+    # grid_re <- merge(grid_re, binned_re, by.x="cell", by.y="cell")
+    # mapview(grid_re, zcol = "count")
+    # mapview(grid_re, zcol = "n_birds")
+    
+    
+    ## ----------------------------------------------------------------------------
+    ## Group neighbouring hexcells into 'sites' -----------------------------------
+    
+    ## solution found here:
+    ## https://gis.stackexchange.com/questions/323038/dissolve-only-overlapping-polygons-in-r-using-sf
+    
+    ## union intersecting polygons into combined polygon
+    parts <- st_cast(st_union(grid_re),"POLYGON")
+    plot(parts)
+    
+    ## identify which 'part' each cell polygon intersects
+    cellgrp <- unlist(st_intersects(grid_re, parts))
+    
+    ## union cell polygons by their cellgroup membership + paste cell numbers
+    grid_re2 <- cbind(grid_re, cellgrp) %>%
+      group_by(cellgrp) %>%
+      summarize(
+        cell = paste(cell, collapse = ", ")
+      )
+    
+    mapview(grid_re2)
+    
+    ## centroid of cell group polygon
+    ccenters_re <- st_centroid(grid_re2) %>% 
+      dplyr::mutate(lon_deg = sf::st_coordinates(.)[,1],
+                    lat_deg = sf::st_coordinates(.)[,2])
+    
+    ## interactive map of cell centers
+    # cbind.data.frame(lat=ccenters_re$lat_deg, lon=ccenters_re$lon_deg) %>%
+    #   sf::st_as_sf(
+    #     coords = c("lon", "lat"),
+    #     crs = 4326, agr = "constant") %>% mapview()
+    
+    ### Update the grid cells' properties to include the number of obs in each cell
+    # grid_re2 <- merge(grid_re2, binned_re, by.x="cell", by.y="cell")
+    # mapview(grid_re, zcol = "count")
+    # mapview(grid_re, zcol = "n_birds")
+    
+    ## add cell center coordinates
+    grid_re2 <- grid_re2 %>% 
+      bind_cols(latitude=ccenters_re$lat_deg, longitude=ccenters_re$lon_deg)
+    
+    
+    ### Overlay relocations on cell group polygons --------------------------------
+    
+    outdat %<>% sf::st_as_sf(
+      coords = c("longitude", "latitude"),
+      crs = 4326, agr = "constant")
+    
+    ov <- sapply(
+      st_intersects(outdat, grid_re2),
+      function(x){
+        if(length(x) == 0){x <- 'none'}
+        return(x[1])
+      })
+    
+    grid_re2$rowid <- 1:nrow(grid_re2)
+    
+    ## combine site info with overlap result
+    pntscellgrps <- left_join(data.frame(rowid = ov), st_drop_geometry(grid_re2))
+    
+    ## combine overlap result back into bird locations w/ cellgroup info
+    outdat <- bind_cols(outdat, pntscellgrps[,c("cellgrp", "cell")]) %>% 
+      mutate(
+        cellgrp = paste0("cellgrp_", cellgrp),
+        SitRecID = cellgrp ## make the cell group the main site ID
+      )
+    
+    ## create reference table of sites w/ obs --------------------------------------
+    ## Out site centroids:
+    out_cent <- ccenters_re %>% 
+      mutate(
+        site_type = "outsite",
+        cellgrp = paste0("cellgrp_", cellgrp),
+        SitRecID = cellgrp ## make the cell group the main site ID
+      ) %>% group_by(SitRecID, cellgrp, site_type) %>% 
+      st_as_sf(coords = c("longitude", "latitude"), 
+               crs = 4326, agr = "constant") %>% 
+      summarise() %>% 
+      dplyr::select(SitRecID, site_type, geometry)
+    
+    site_cent %<>% 
+      mutate(
+        site_type = "IBA",
+        SitRecID = as.character(SitRecID)) %>% 
+      dplyr::select(SitRecID, site_type, geometry)
+    
+    ## re-merge in and out data
+    oneid <- outdat %>% 
+      mutate(longitude = st_coordinates(.)[,1],
+             latitude = st_coordinates(.)[,2]) %>% 
+      st_drop_geometry() %>% bind_rows(indat) %>%
+      arrange(bird_id, timestamp)
+    
+    # create reference table of sites w/ obs --------------------------------------
+    site_cent <- bind_rows(site_cent, out_cent)
+  } else {
+    site_cent %<>% 
+      mutate(
+        site_type = "IBA",
+        SitRecID = as.character(SitRecID)) %>% 
+      dplyr::select(SitRecID, site_type, geometry)
+    
+    ## re-merge in and out data
+    oneid <- indat
+  }
+
+  site_summ <- oneid %>% 
+    group_by(site_poly, SitRecID) %>% summarise() %>% 
+    left_join(site_cent, by = c("SitRecID")) %>% st_as_sf()
+  
+  site_summ %>% mapview(zcol="site_type")
+  
+  if(nrow(site_summ) < 2){
+    print("only one site visited")
+    next}
+  
+  ## Edge list ------------------------------------------------------------------
   
   ###---------------------------------------------------------------------------
   ### network ------------------------------------------------------------------
   
-  ## (optionally) remove locations falling outside any site polygon
-  nones  <- filter(oneid, site_poly == "none")
+  ## create (relative) numeric code for nodes/sites -----------------------------
+  # oneid$loc_num <- as.numeric(as.factor(oneid$site_poly)) # name
+  oneid$loc_num <- as.numeric(as.factor(oneid$SitRecID))  # (absolute) numeric
   
-  ## filter to only obs w/in sites (and for trax, only site visits >= 2 days)
-  if(datatype == "color"){
-    # saveRDS(
-    #   nones,
-    #   paste0("data/analysis/ringing/color_outside_", season, "_ibas10km.rds"))
-    netdat2 <- filter(oneid, site_poly != "none")
-  } else if (datatype == "metal"){
-    # saveRDS(
-    #   nones,
-    #   paste0("data/analysis/ringing/metal_outside_", season, "_ibas10km.rds"))
-    netdat2 <- filter(oneid, site_poly != "none")
-  } else if (datatype == "trax"){
-    # saveRDS(
-    #   nones,
-    #   paste0("data/analysis/tracking/outside_trax_", season, "_ibas10km.rds"))
-    netdat2 <- filter(oneid, site_poly != "none" & n_day >= 2)
-  }
-  
-  ## again remove birds w/ only one sighting (to avoid unconnected nodes) -------
-  ##**WILL NEED TO ADD BACK IN TO MAKE COMPARISONS W/ OUTSIDE POINTS ##
-  xz <- netdat2 %>% group_by(bird_id) %>% 
-    summarise(nobs = n()) %>% filter(nobs == 1)
-  netdat2 <- subset(netdat2, !bird_id %in% xz$bird_id)
-  
-  ## remove birds only seen (multiple times) at same site ----------------------- 
-  ##**ALSO HERE WILL NEED TO ADD BACK IN TO MAKE COMPARISONS W/ OUTSIDE POINTS ##
-  nsites <- netdat2 %>% group_by(bird_id) %>% 
-    summarise(nsites = n_distinct(site_poly))
-  
-  ## % of birds w/ relocs at one site only
-  sum(nsites$nsites == 1) / n_distinct(netdat2$bird_id) * 100
-  
-  xz2 <- filter(nsites, nsites == 1)
-  netdat2 <- subset(netdat2, !bird_id %in% xz2$bird_id)
-  
-  ## (local) numeric code of nodes/sites ------------------------------------------------
-  # netdat2$loc_num <- as.numeric(as.factor(netdat2$site_poly)) # name
-  netdat2$loc_num <- as.numeric(as.factor(netdat2$SitRecID))  # (absolute) numeric
-  
-  # create reference table of sites w/ obs --------------------------------------
-  site_cent <- readRDS( ## site centroids
-    "data/geodata/ibas/Africa_Europe_IBA/Africa_Europe_IBA_centroids.shp") 
-  site_cent %<>% 
-    mutate(SitRecID = as.character(SitRecID)) %>% 
-    dplyr::select(SitRecID, geometry)
-  
-  site_summ <- netdat2 %>% 
-    group_by(loc_num, site_poly, SitRecID) %>% summarise() %>% 
-    left_join(site_cent, by = c("SitRecID")) %>% st_as_sf()
   
   ## Edge list ------------------------------------------------------------------
   
   ## produce all combinations of sites visited by each individual
-  netdat2_list <- split(netdat2, netdat2$bird_id)
+  oneid_list <- split(oneid, oneid$bird_id)
   
-  tic()
-  netdat2_list <- lapply(
-    seq_along(netdat2_list), 
+  oneid_list <- lapply(
+    seq_along(oneid_list), 
     function(x){
       # print(x)
-      one <- netdat2_list[[x]]
+      one <- oneid_list[[x]]
       xx <- as.data.frame(
         RcppAlgos::comboGrid(
           one$loc_num,
@@ -185,9 +335,8 @@ for(i in seq_len(n_ids)){
       xx$bird_id <- one$bird_id[1]
       return(xx)
     })
-  toc()
   
-  full <- data.table::rbindlist(netdat2_list)
+  full <- data.table::rbindlist(oneid_list)
   
   ## remove self connections
   noself <- full[-which(full$Var1 == full$Var2), ]
@@ -203,8 +352,6 @@ for(i in seq_len(n_ids)){
       n_id = n(),
       prop_id = n_id / n_id_total
     )
-  
-  if(nrow(edgelist) == 0) {next}
   
   ## re-split site combos into separate columns
   edgelist <- cbind(
@@ -222,7 +369,7 @@ for(i in seq_len(n_ids)){
   
   ## Vertex list ---------------------------------------------------------------
   if(datatype %in% c("color", "metal")){
-    n_obstype <- netdat2 %>% 
+    n_obstype <- oneid %>% 
       group_by(loc_num, SitRecID, obstype) %>% 
       summarise(
         n_obs = n()
@@ -233,7 +380,7 @@ for(i in seq_len(n_ids)){
         values_from = "n_obs"
       )
   } else if (datatype == "trax"){
-    n_obstype <- netdat2 %>% 
+    n_obstype <- oneid %>% 
       group_by(loc_num, SitRecID, device) %>% 
       summarise(
         n_obs = n()
@@ -244,9 +391,9 @@ for(i in seq_len(n_ids)){
       )
   }
   
-  n_id_total <- n_distinct(netdat2$bird_id)
+  n_id_total <- n_distinct(oneid$bird_id)
   
-  nodelist <- netdat2 %>% group_by(loc_num, SitRecID,) %>% 
+  nodelist <- oneid %>% group_by(loc_num, SitRecID) %>% 
     summarise(
       n_id    = n_distinct(bird_id),
       prop_id = n_id / n_id_total,
@@ -256,6 +403,7 @@ for(i in seq_len(n_ids)){
   nodelist <- nodelist %>% 
     left_join(site_summ) %>% 
     sf::st_as_sf()
+  
   
   ## Convert to sfnetwork -------------------------------------------------------
   
@@ -276,8 +424,8 @@ for(i in seq_len(n_ids)){
   wmap_prj <- st_as_sf(wmap) 
   
   bbox <- st_bbox(
-    c(xmin = -16, xmax = 21,
-      ymin = 8, ymax = 65.2), crs = 4326)
+    c(xmin = -23, xmax = 30,
+      ymin = 7, ymax = 66), crs = 4326)
   
   # trxmap <- ggplot() + 
   #   geom_sf(data = wmap_prj, fill = NA, color = "grey20", size=0.2) +
@@ -298,9 +446,9 @@ for(i in seq_len(n_ids)){
              ylim = c(bbox[2], bbox[4]), expand = T) + 
     theme_void() +
     theme(panel.background = element_rect(fill="white"))# +
-    # ggtitle("Network")
+  # ggtitle("Network")
   
-  id <- netdat2$bird_id[1]
+  id <- oneid$bird_id[1]
   
   # library(patchwork)
   # combmap <- trxmap + netmap
@@ -308,6 +456,7 @@ for(i in seq_len(n_ids)){
   # ggsave(paste0("figures/ind_data/", datatype, "/", season, "/", id, ".png"), 
   #        height=3.5, width=3.5)
   # 
-  ggsave(paste0("figures/ind_data/", datatype, "/", season, "/", id, ".png"), 
+  ggsave(paste0("figures/ind_data/", datatype, "/", season, "/", id, ".png"),
          plot=netmap, height=3.5, width=3.5)
 }
+
