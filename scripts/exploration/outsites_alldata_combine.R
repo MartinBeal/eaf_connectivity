@@ -6,11 +6,6 @@ pacman::p_load(dplyr, stringr, ggplot2, sf, mapview, magrittr, lubridate, dggrid
 ## fxn for splitting string into columns
 source("C:/Users/Martim Bill/Documents/R/source_scripts/str2col.R")
 
-### Season
-season <- "all"
-# season <- "spring"
-# season <- "fall"
-
 ## ring relocations overlaid on polygon layer
 coldat <- readRDS("data/analysis/ringing/cring_merge_no7dayreobs_ibas.rds")
 coldat %<>% rename(timestamp = date) %>% mutate(datatype="color")
@@ -32,19 +27,6 @@ alldat <- bind_rows(
 ## Use only locations falling outside any existing site polygon
 outdat <- alldat %>% filter(site_poly == "none")
 indat  <- alldat %>% filter(site_poly != "none")
-
-### Separate networks for fall and spring migration ---------------------------
-## Spring: January 1 - June 30th, Fall: June 24th - January 31st
-
-if(season == "spring"){
-  outdat <- subset(outdat, month(outdat$timestamp) %in% c(1:6))
-} else if(season == "fall"){
-  doy <- lubridate::yday(alldat$timestamp) # June 23/24: 175
-  outdat <- subset(
-    alldat, 
-    month(outdat$timestamp) %in% c(1, 7:12) | doy %in% c(175:181)
-  )
-}
 
 ## ----------------------------------------------------------------------------
 ## Hexgrid --------------------------------------------------------------------
