@@ -7,8 +7,8 @@ pacman::p_load(
 
 ## Run through each data type -------------------------------------------------
 # datatype <- "metal"
-# datatype <- "color"
-datatype <- "trax"
+datatype <- "color"
+# datatype <- "trax"
 
 if(datatype == "color"){
   ## color ringed bird captures and resightings overlaid on polygon layer
@@ -71,7 +71,19 @@ displ_id <- netdat %>% group_by(id) %>%
     mx_displ = max(disp_km)
   )
 
-## remove individuals w/ only local displacement (i.e. no migration)
+write.csv(displ_id, paste0("data/analysis/summaries/", datatype,"_id_displ_summ.csv"))
+
+## histogram
+ggplot(displ_id, mapping=aes(mx_displ)) + 
+  geom_histogram(bins=100) + 
+  theme_bw() +
+  geom_vline(aes(xintercept=100), color = "blue") + 
+  geom_vline(aes(xintercept=200), color = "red")
+
+ggsave(paste0("figures/", datatype,"_id_displ_hist.png"), width = 6, height = 5)
+
+
+## remove individuals w/ only local displacement (i.e. no migration) ----------
 
 wmig <- filter(displ_id, mx_displ >= 200)
 

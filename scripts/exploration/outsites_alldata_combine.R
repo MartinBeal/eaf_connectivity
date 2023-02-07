@@ -14,7 +14,7 @@ metdat <- readRDS("data/analysis/ringing/euring_metal_ibas.rds")
 metdat %<>% rename(timestamp = date) %>% mutate(datatype="metal")
 ## tracking locations overlaid on polygon layer
 trxdat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_stpovrs_ibas.rds")
-trxdat %<>% mutate(datatype="tracking")
+trxdat %<>% mutate(datatype="trax")
 
 
 ## combine datatype sets ------------------------------------------------------

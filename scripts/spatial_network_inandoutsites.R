@@ -1,5 +1,8 @@
-## Create a spatial, undirected network from ring recapture and resighting data
-# to sites defined using a polygon layer (IBAs, RAMSAR etc)
+### Create a spatial, undirected network from ring recapture and resighting data
+## to sites defined using a polygon layer (IBAs, RAMSAR etc) and hexcells 
+# for unidentified sites
+
+# VERSION that uses same sites (in and out) for all data/seasons
 
 pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2, 
                sf, mapview, magrittr, lubridate, netrankr)
@@ -8,24 +11,24 @@ pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2,
 ## choose data subset to run --------------------------------------------------
 
 ## which network to create
-season <- "all"
+# season <- "all"
 # season <- "spring"
-# season <- "fall"
+season <- "fall"
 
 ## Run through each data type -------------------------------------------------
 # dtype <- "metal"
-dtype <- "color"
-# dtype <- "trax"
+# dtype <- "color"
+dtype <- "trax"
 
 ## Load site cummary both IBAs and outsite centroids) ------------------------
 site_summ <- readRDS(
-  paste0("data/analysis/site_nodes/alldatatypes_allsites_cent_", season, ".rds")
+  paste0("data/analysis/site_nodes/alldatatypes_allsites_cent_all.rds")
 )
 
 ## Load combined data, with both IBA overlay info and hexgrid outsites -------
 ### SAVE 
 alldat <- readRDS(
-  paste0("data/analysis/combined/alldatatypes_ibas_outsites_", season, ".rds"))
+  paste0("data/analysis/combined/alldatatypes_ibas_outsites_all.rds"))
 
 ## filter to one datatype
 alldat <- subset(alldat, str_detect(alldat$datatype, dtype))
@@ -120,30 +123,27 @@ netdat$loc_num <- as.numeric(as.factor(netdat$SitRecID))  # (absolute) numeric
 
 ## Edge list ------------------------------------------------------------------
 
-## produce all combinations of sites visited by each individual
-netdat_list <- split(netdat, netdat$bird_id)
+oneid_list <- split(netdat, netdat$bird_id)
 
-netdat_list <- lapply(
-  seq_along(netdat_list), 
+oneid_list <- lapply(
+  seq_along(oneid_list), 
   function(x){
-    # print(x)
-    one <- netdat_list[[x]]
-    xx <- as.data.frame(
-      RcppAlgos::comboGrid(
-        one$loc_num,
-        one$loc_num, repetition = TRUE)
+    one <- oneid_list[[x]]
+    xx <- data.frame(
+      bird_id = one$bird_id[i],
+      from = one$loc_num[1:nrow(one)-1],
+      to   = one$loc_num[2:nrow(one)]
     )
-    xx$bird_id <- one$bird_id[1]
     return(xx)
   })
 
-full <- data.table::rbindlist(netdat_list)
+full <- data.table::rbindlist(oneid_list)
 
 ## remove self connections
-noself <- full[-which(full$Var1 == full$Var2), ]
+noself <- full[-which(full$from == full$to), ]
 
 ## combine sites into single variable for summarizing
-noself$sitecomb <- paste(noself$Var1, noself$Var2)
+noself$sitecomb <- paste(noself$from, noself$to)
 
 ## retain only unique site combos, summ how many individuals for connex
 n_id_total <- n_distinct(noself$bird_id)
@@ -161,9 +161,6 @@ edgelist <- cbind(
           pattern = " ", 
           cols = 1:2, colnames = c("from", "to"))
 ) %>% 
-  mutate(
-    from = as.integer(from), to = as.integer(to)
-  ) %>% 
   dplyr::select(from, to, n_id, prop_id) %>% 
   as_tibble()
 
@@ -207,9 +204,12 @@ nodelist <- nodelist %>%
 
 ## Convert to sfnetwork -------------------------------------------------------
 
-# netsf <- sfnetwork(nodelist, edgelist, node_key = "dist", directed = F)
+## undirected - reciprocal edges
 netsf <- sfnetwork(nodelist, edgelist, node_key = "dist", directed = F, 
                    edges_as_lines = TRUE)
+## directed - order matters
+# netsf <- sfnetwork(nodelist, edgelist, node_key = "dist", directed = T, 
+#                    edges_as_lines = TRUE)
 
 
 ### Calculate network metrics ------------------------------------------------
@@ -257,5 +257,5 @@ mapview::mapview(nodesf, zcol="degree_rank")
 
 ## SAVE ##
 
-saveRDS(netsf, paste0("data/analysis/networks/", dtype,"_", season, "_iba10km_poly.rds"))
+saveRDS(netsf, paste0("data/analysis/networks/", dtype,"_", season, "_iba_hex_10km.rds"))
 

@@ -4,22 +4,23 @@ pacman::p_load(sfnetworks, sf, dplyr, magrittr, ggplot2)
 
 ## which network to create
 # season <- "all"
-season <- "spring"
-# season <- "fall"
+# season <- "spring"
+season <- "fall"
 
+## networks including in and out sites
 m_net <- readRDS(
-  paste0("data/analysis/networks/metal_", season, "_iba10km_poly.rds"))
+  paste0("data/analysis/networks/metal_", season, "_iba_hex_10km.rds"))
 c_net <- readRDS(
-  paste0("data/analysis/networks/color_", season, "_iba10km_poly.rds"))
+  paste0("data/analysis/networks/color_", season, "_iba_hex_10km.rds"))
 t_net <- readRDS(
-  paste0("data/analysis/networks/trax_", season, "_iba10km_poly.rds"))
+  paste0("data/analysis/networks/trax_", season, "_iba_hex_10km.rds"))
 
 ## interactive map it
-anet <- m_net
+anet <- t_net
 nodesf <- anet %>% activate("nodes") %>% sf::st_as_sf()
 edgesf <- anet %>% activate("edges") %>% sf::st_as_sf()
-# mapview::mapview(nodesf, zcol="n_id")
-# mapview::mapview(edgesf)
+mapview::mapview(nodesf, zcol="n_id")
+mapview::mapview(edgesf)
 
 m_nodes <- st_as_sf(m_net, "nodes")
 c_nodes <- st_as_sf(c_net, "nodes")
@@ -93,10 +94,10 @@ for(i in seq_along(dts)){
   
   ## SAVE  ##
   ggsave(
-    paste0("figures/networks/", datatype,"_", season, "_iba10kmX.png"), 
+    paste0("figures/networks/n_id/", datatype,"_", season, "_iba_hex_10kmX.png"), 
     plot=map1, width=5, height = 6)
-  # ggsave(paste0("figures/networks/", datatype,"_", season, "_iba10km_polyX.png"), plot=map, width=5, height = 6)
-  # ggsave(paste0("figures/networks/", datatype,"_", season, "_iba10km_iceX.png"), plot=map, width=5, height = 6)
+  # ggsave(paste0("figures/networks/n_id/", datatype,"_", season, "_iba_hex_10kmX.png"), plot=map, width=5, height = 6)
+  # ggsave(paste0("figures/networks/n_id/", datatype,"_", season, "_iba10km_iceX.png"), plot=map, width=5, height = 6)
   
   ## Map 2:3 network metrics --------------------------------------------------
   map2 <- ggplot() +
@@ -145,13 +146,13 @@ for(i in seq_along(dts)){
     map3
 
     ## Save -------------------------------------
-    # ggsave(paste0("figures/networks/", datatype,"_", season, "_iba10km_poly_betweeness.png"), plot=map2, width=5, height = 6)
-    # ggsave(paste0("figures/networks/", datatype,"_", season, "_iba10km_poly_degree.png"), plot=map2, width=5, height = 6)
+    # ggsave(paste0("figures/networks/", datatype,"_", season, "_iba_hex_10km_betweeness.png"), plot=map2, width=5, height = 6)
+    # ggsave(paste0("figures/networks/", datatype,"_", season, "_iba_hex_10km_degree.png"), plot=map2, width=5, height = 6)
     ggsave(
-      paste0("figures/networks/", datatype,"_", season, "_iba10km_poly_degreernkX.png"), 
+      paste0("figures/networks/netmetrics/", datatype,"_", season, "_iba_hex_10km_degreernkX.png"), 
       plot=map2, width=5, height = 6)
     ggsave(
-      paste0("figures/networks/", datatype,"_", season, "_iba10km_poly_btwnrnkX.png"), 
+      paste0("figures/networks/netmetrics/", datatype,"_", season, "_iba_hex_10km_btwnrnkX.png"), 
       plot=map3, width=5, height = 6)
     
 }
