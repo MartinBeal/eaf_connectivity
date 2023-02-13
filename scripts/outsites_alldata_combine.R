@@ -1,5 +1,8 @@
+### ---------------------------------------------------------------------------
 ### Identify all outsites (hexcells) across all three datatypes ### -----------
-## Outsite layer to later use in creating datatype-specific networks 
+## Combine hexcells outside IBAs into 'outsites' 
+# Forms outsite layer to use in creating datatype-specific networks 
+### ---------------------------------------------------------------------------
 
 pacman::p_load(dplyr, stringr, ggplot2, sf, mapview, magrittr, lubridate, dggridR)
 
@@ -104,7 +107,8 @@ ccenters_re <- st_centroid(grid_re2) %>%
 
 ## add cell center coordinates
 grid_re2 <- grid_re2 %>% 
-  bind_cols(latitude = ccenters_re$lat_deg, longitude = ccenters_re$lon_deg)
+  bind_cols(
+    latitude = ccenters_re$lat_deg, longitude = ccenters_re$lon_deg)
 
 
 ### Overlay relocations on cell group polygons --------------------------------

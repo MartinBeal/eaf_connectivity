@@ -6,8 +6,8 @@ pacman::p_load(
 
 
 ## Run through each data type -------------------------------------------------
-# datatype <- "metal"
-datatype <- "color"
+datatype <- "metal"
+# datatype <- "color"
 # datatype <- "trax"
 
 if(datatype == "color"){
@@ -75,17 +75,24 @@ write.csv(displ_id, paste0("data/analysis/summaries/", datatype,"_id_displ_summ.
 
 ## histogram
 ggplot(displ_id, mapping=aes(mx_displ)) + 
+  xlim(-100, 6500) +
+  # ylim(0,30) + # tracking 
+  # ylim(0,75) + # metal
+  # ylim(0,2050) + # color
   geom_histogram(bins=100) + 
   theme_bw() +
+  theme(
+    axis.text = element_text(size=11)
+  ) + 
   geom_vline(aes(xintercept=100), color = "blue") + 
   geom_vline(aes(xintercept=200), color = "red")
 
-ggsave(paste0("figures/", datatype,"_id_displ_hist.png"), width = 6, height = 5)
+ggsave(paste0("figures/", datatype,"_id_displ_hist.png"), width = 5, height = 4)
 
 
 ## remove individuals w/ only local displacement (i.e. no migration) ----------
 
-wmig <- filter(displ_id, mx_displ >= 200)
+wmig <- filter(displ_id, mx_displ >= 100)
 
 allids <- n_distinct(netdat$id)
 netdat %<>% filter(id %in% wmig$id)

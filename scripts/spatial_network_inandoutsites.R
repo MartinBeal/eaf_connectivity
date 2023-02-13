@@ -1,6 +1,5 @@
 ### Create a spatial, undirected network from ring recapture and resighting data
-## to sites defined using a polygon layer (IBAs, RAMSAR etc) and hexcells 
-# for unidentified sites
+## to sites defined using the IBA layer and hexcells for unidentified sites
 
 # VERSION that uses same sites (in and out) for all data/seasons
 
@@ -75,7 +74,7 @@ if(dtype == "trax"){
   
   ## remove individuals w/ only local displacement (i.e. no migration)
   
-  wmig <- filter(displ_id, mx_displ >= 200)
+  wmig <- filter(displ_id, mx_displ >= 100)
   
   n_distinct(netdat$id)
   netdat %<>% filter(id %in% wmig$id)

@@ -1,6 +1,6 @@
-## Identify used sites/nodes and their importance from data falling outside
-# polygon  dataset of known sites
-# Sites defined using hexgrid binning (i.e. coordinates binned into cells
+#### Identify used sites/nodes and their importance from data falling outside
+### polygon  dataset of known sites
+## Sites defined using hexgrid binning (i.e. coordinates binned into cells
 # of a certain size)
 
 pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2,
