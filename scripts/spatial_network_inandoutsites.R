@@ -15,9 +15,9 @@ season <- "all"
 # season <- "fall"
 
 ## Run through each data type -------------------------------------------------
-# dtype <- "metal"
+dtype <- "metal"
 # dtype <- "color"
-dtype <- "trax"
+# dtype <- "trax"
 
 ## Defining edges, three options: ---------------------------------------------
 #1: population-level (only unique connections across all birds)
@@ -112,8 +112,9 @@ oneid_list <- lapply(
       to   = one$loc_num[2:nrow(one)]
     )
     ## remove self connections
+    if(any(xx$from == xx$to)){
     xx <- xx[-which(xx$from == xx$to), ]
-    
+    }
     #2: individual-level edges
     if(edgetype == "ind"){
       ## identify identical connections ignoring order (undirected)
@@ -253,19 +254,23 @@ nodesf <- netsf %>% activate("nodes") %>% sf::st_as_sf()
 edgesf <- netsf %>% activate("edges") %>% sf::st_as_sf()
 #   mapview::mapview(nodesf, zcol="n_id")
 
+mapview::mapview(nodesf, zcol="degree") +
+  mapview::mapview(edgesf)
+
+
 ## just nodes
 # mapview::mapview(nodesf, zcol="n_id")
 # mapview::mapview(nodesf, zcol="between")
-mapview::mapview(nodesf, zcol="degree")
+# mapview::mapview(nodesf, zcol="degree")
 # mapview::mapview(nodesf, zcol="between_norm")
-mapview::mapview(nodesf, zcol="degree_rank")
+# mapview::mapview(nodesf, zcol="degree_rank")
 # mapview::mapview(nodesf, zcol="btwn_rank")
-nodesf %>% filter(degree > 1) %>% mapview::mapview()
+# nodesf %>% filter(degree > 1) %>% mapview::mapview()
 # mapview::mapview(nodesf, zcol="btwn_rank") 
-mapview::mapview(nodesf, zcol="degree_rank") +
+# mapview::mapview(nodesf, zcol="degree_rank") +
   # (filter(edgesf, from %in% 516 | to %in% 516) %>%
-  (filter(edgesf, from %in% 489 | to %in% 489) %>%
-     mapview::mapview())
+  # (filter(edgesf, from %in% 489 | to %in% 489) %>%
+  #    mapview::mapview())
 
 ## SAVE ##
 
