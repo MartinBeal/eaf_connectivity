@@ -123,12 +123,12 @@ tag_clean$scheme <- "tag_JAlves"
 
 # re-captures
 # caps_tag <- subset(tag, Status == 'N', select=c(combo, Date, tbl_location.site, Age)) %>% 
-  # droplevels %>% caps_names
+# droplevels %>% caps_names
 
 # re-sightings only, # 2000 onwards
 # dat_tag <- subset(tag, Status=='S', select=c(combo, Date, tbl_location.site)) %>% 
-  # droplevels %>% dat_names #%>% 
-  #subset(date > as.POSIXct('2000-01-01') & date < as.POSIXct('2021-06-01'))
+# droplevels %>% dat_names #%>% 
+#subset(date > as.POSIXct('2000-01-01') & date < as.POSIXct('2021-06-01'))
 
 
 
@@ -238,7 +238,7 @@ wash$`Resight country` <- ifelse(
   "Wales", wash$`Resight country`)
 
 wash[which(wash$country != wash$`Resight country`),
-          c("country", "Resight country", "n", "w")]
+     c("country", "Resight country", "n", "w")]
 
 ## remove the leftovers (too wrong to know which is right!)
 wash <- wash[-which(wash$country != wash$`Resight country`), ]
