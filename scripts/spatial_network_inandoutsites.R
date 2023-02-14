@@ -10,9 +10,9 @@ pacman::p_load(dplyr, igraph, stringr, tictoc, tidygraph, sfnetworks, ggplot2,
 ## choose data subset to run --------------------------------------------------
 
 ## which network to create
-# season <- "all"
+season <- "all"
 # season <- "spring"
-season <- "fall"
+# season <- "fall"
 
 ## Run through each data type -------------------------------------------------
 # dtype <- "metal"
@@ -34,12 +34,7 @@ alldat <- subset(alldat, str_detect(alldat$datatype, dtype))
 
 # fxn for splitting string into columns
 source("C:/Users/Martim Bill/Documents/R/source_scripts/str2col.R")
-# fxn for calc. displacement distance from first tracking locations
-source("C:/Users/Martim Bill/Documents/R/source_scripts/displ_dist.R")
 
-# alldat %<>% rename(combo = metal)
-# alldat %<>% filter(obssource == "euring") # which data sources
-# alldat %<>% filter(obssource != "euring")
 
 ### Separate networks for fall and spring migration
 ## Spring: January 1 - June 30th, Fall: June 24th - January 31st
@@ -54,34 +49,6 @@ if(season == "all"){ ## year-round
     alldat, 
     month(alldat$timestamp) %in% c(1, 7:12) | doy %in% c(175:181)
   )
-}
-
-## Tracking data: rmv ids w/ only local displacement in season (i.e. no mig.)
-if(dtype == "trax"){
-  netdat <- rename(netdat, id = bird_id)
-  ## add column of diplacement distance from first location 
-  netdat <- displ_dist(netdat)
-  
-  ## Summarise max/avg distance from first points -------------------------------
-  
-  displ_id <- netdat %>% group_by(id) %>% 
-    summarise(
-      mn_displ = mean(disp_km),
-      sd_displ = sd(disp_km),
-      md_displ = median(disp_km),
-      mx_displ = max(disp_km)
-    )
-  
-  ## remove individuals w/ only local displacement (i.e. no migration)
-  
-  wmig <- filter(displ_id, mx_displ >= 100)
-  
-  n_distinct(netdat$id)
-  netdat %<>% filter(id %in% wmig$id)
-  n_distinct(netdat$id) 
-  
-  netdat <- rename(netdat, bird_id = id)
-  
 }
 
 ## show data from a certain place
@@ -124,22 +91,36 @@ netdat$loc_num <- as.numeric(as.factor(netdat$SitRecID))  # (absolute) numeric
 
 oneid_list <- split(netdat, netdat$bird_id)
 
+# x=43 # (bird that died in sahara)
 oneid_list <- lapply(
   seq_along(oneid_list), 
   function(x){
     one <- oneid_list[[x]]
     xx <- data.frame(
-      bird_id = one$bird_id[i],
+      bird_id = one$bird_id[1],
       from = one$loc_num[1:nrow(one)-1],
       to   = one$loc_num[2:nrow(one)]
     )
+    ## remove self connections
+    xx <- xx[-which(xx$from == xx$to), ]
+    ## identify identical connections ignoring order (undirected)
+    xx$sortcomb <- sapply(seq_along(xx$from), function(f){
+      rw <- xx[f,]
+      sortcomb <- paste(sort(c(rw$from, rw$to)), collapse = " ")
+      return(sortcomb)
+      })
+    
+    ### one site-site connection per bird
+    ## remove duplicated connections (i.e. identical: from-->to, to-->from)
+    # ONLY FOR UNDIRECTED NETWORK!
+    if(any(duplicated(xx$sortcomb))){
+      xx <- xx[-which(duplicated(xx$sortcomb)), ]
+    }
+
     return(xx)
   })
 
-full <- data.table::rbindlist(oneid_list)
-
-## remove self connections
-noself <- full[-which(full$from == full$to), ]
+noself <- data.table::rbindlist(oneid_list)
 
 ## combine sites into single variable for summarizing
 noself$sitecomb <- paste(noself$from, noself$to)
@@ -201,7 +182,7 @@ nodelist <- nodelist %>%
   left_join(site_summ) %>% 
   sf::st_as_sf()
 
-## Convert to sfnetwork -------------------------------------------------------
+## Create sfnetwork -----------------------------------------------------------
 
 ## undirected - reciprocal edges
 netsf <- sfnetwork(nodelist, edgelist, node_key = "dist", directed = F, 
@@ -228,7 +209,7 @@ nedges  <- nrow(st_as_sf(netsf, "edges"))
 netsf %<>%
   activate(nodes) %>%
   mutate(
-    degree      = centrality_degree(),
+    degree      = centrality_degree(loops = FALSE), # no self-connections
     degree_norm = degree / n_distinct(loc_num), # normalized 0-1 (prop of sites)
     degree_rank = dense_rank(desc(degree)),
     between     = centrality_betweenness(directed = FALSE), # node betweenness
@@ -244,15 +225,16 @@ edgesf <- netsf %>% activate("edges") %>% sf::st_as_sf()
 ## just nodes
 # mapview::mapview(nodesf, zcol="n_id")
 # mapview::mapview(nodesf, zcol="between")
-# mapview::mapview(nodesf, zcol="degree")
+mapview::mapview(nodesf, zcol="degree")
 # mapview::mapview(nodesf, zcol="between_norm")
 mapview::mapview(nodesf, zcol="degree_rank")
 # mapview::mapview(nodesf, zcol="btwn_rank")
-
+nodesf %>% filter(degree > 1) %>% mapview::mapview()
 # mapview::mapview(nodesf, zcol="btwn_rank") 
-# mapview::mapview(nodesf, zcol="btwn_rank") +
-# (filter(edgesf, from %in% 241 | to %in% 241) %>% 
-#   mapview::mapview())
+mapview::mapview(nodesf, zcol="degree_rank") +
+# (filter(edgesf, from %in% 516 | to %in% 516) %>%
+  (filter(edgesf, from %in% 489 | to %in% 489 ) %>%
+  mapview::mapview())
 
 ## SAVE ##
 

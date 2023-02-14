@@ -1,21 +1,16 @@
-## overlay bird locations on vector dataset of 'sites' (IBAs, Ramsar, PAs)
-# and find closest site w/in a threshold distance
+### overlay bird locations on vector dataset of 'sites' (IBAs, Ramsar, PAs)
+## and find closest site w/in a threshold distance
+# VERSION with all datatypes combined
 
 pacman::p_load(dplyr, igraph, stringr, tictoc, ggplot2, 
                sf, mapview, magrittr, lubridate)
 
-datatype <- "metal"
-# datatype <- "color"
 
-if(datatype == "color"){
-  ## ring relocations overlaid on polygon layer
-  alldat <- readRDS("data/analysis/ringing/cring_merge_no7dayreobs.rds")
-} else if (datatype == "metal"){
-  ## tracking locations overlaid on polygon layer
-  alldat <- readRDS("data/analysis/ringing/euring_filtbycr.rds") ## IBAs
-}
+## all three datatypes together -----------------------------------------------
+alldat <- readRDS("data/analysis/combined/alldatatypes_100km_all.rds")
 
-## polygon dataset (IBAs)
+
+## polygon dataset (IBAs) -----------------------------------------------------
 iba <- st_read("data/geodata/ibas/EAF_btgo_IBA/eaf_btgo_iba.shp")
 
 iba %<>% st_make_valid() # deal with polygon invalidity
@@ -29,11 +24,11 @@ alldat_sf <- alldat %>% st_as_sf(
 
 ## overlay points on polygons -------------------------------------------------
 ov <- sapply(
-    st_intersects(alldat_sf, iba),
-    function(x){
-      if(length(x) == 0){x <- 'none'}
-      return(x[1])
-      })
+  st_intersects(alldat_sf, iba),
+  function(x){
+    if(length(x) == 0){x <- 'none'}
+    return(x[1])
+  })
 
 iba$rowid <- as.character(1:nrow(iba))
 
@@ -47,7 +42,7 @@ alldat <- bind_cols(alldat, pntsibas[,c("SitRecID", "IntName")])
 alldat %<>% mutate(
   SitRecID = ifelse(is.na(SitRecID), "none", SitRecID),
   IntName = ifelse(is.na(IntName), "none", IntName)
-  )
+)
 
 # alldat_sf <- alldat %>% st_as_sf(
 #   coords = c("longitude", "latitude"), 
@@ -73,11 +68,11 @@ whichpoly <- sapply(
   ibainrange,
   function(x){
     if(length(x) == 0)
-      {x <- 'none'} else if (length(x) > 1)
-        {x <- 'multiple'
+    {x <- 'none'} else if (length(x) > 1)
+    {x <- 'multiple'
     }
     return(x[1])
-    })
+  })
 
 ## get rowid of ibas for points falling in just one iba (keep 'nones')
 singles_rid <- as.character(whichpoly[which(whichpoly != "multiple")])
@@ -123,7 +118,7 @@ multis <- bind_cols(
 all_noout <- subset(alldat, SitRecID != "none")
 
 alldat2 <- bind_rows(all_noout, singles, multis) %>% 
-  arrange(bird_id, date)
+  arrange(bird_id, timestamp)
 
 ## again name points outside polygons as 'none'
 alldat2 %<>% mutate(
@@ -146,15 +141,8 @@ alldat2 %<>% rename(site_poly = IntName) ## IBAs only
 
 ## SAVE -----------------------------------------------------------------------
 
-if(datatype == "color"){
-  ## color resightings
-  saveRDS(alldat2, "data/analysis/ringing/cring_merge_no7dayreobs_ibas.rds")
-  } else if (datatype == "metal"){
-  ## tracking locations overlaid on polygon layer
-    saveRDS(alldat2, "data/analysis/ringing/euring_metal_ibas.rds")
-}
+saveRDS(alldat2, "data/analysis/alldatatypes_100km_ibas.rds")
 
-# saveRDS(alldat2, "data/analysis/ringing/comb_euring_cring_no7dayreobs_ibas.rds")
 
 
 ## get distances 

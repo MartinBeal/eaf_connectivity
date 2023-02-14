@@ -9,23 +9,8 @@ pacman::p_load(dplyr, stringr, ggplot2, sf, mapview, magrittr, lubridate, dggrid
 ## fxn for splitting string into columns
 source("C:/Users/Martim Bill/Documents/R/source_scripts/str2col.R")
 
-## ring relocations overlaid on polygon layer
-coldat <- readRDS("data/analysis/ringing/cring_merge_no7dayreobs_ibas.rds")
-coldat %<>% rename(timestamp = date) %>% mutate(datatype="color")
-## metal ring locations overlaid on polygon layer
-metdat <- readRDS("data/analysis/ringing/euring_metal_ibas.rds")
-metdat %<>% rename(timestamp = date) %>% mutate(datatype="metal")
-## tracking locations overlaid on polygon layer
-trxdat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_stpovrs_ibas.rds")
-trxdat %<>% mutate(datatype="trax")
 
-
-## combine datatype sets ------------------------------------------------------
-alldat <- bind_rows(
-  coldat[, c("bird_id", "timestamp", "latitude", "longitude", "datatype", "site_poly", "SitRecID")],
-  metdat[, c("bird_id", "timestamp", "latitude", "longitude", "datatype", "site_poly", "SitRecID")],
-  trxdat[, c("bird_id", "timestamp", "latitude", "longitude", "datatype", "site_poly", "SitRecID")]
-)
+alldat <- readRDS("data/analysis/alldatatypes_100km_ibas.rds")
 
 ## Use only locations falling outside any existing site polygon
 outdat <- alldat %>% filter(site_poly == "none")
@@ -139,7 +124,7 @@ outdat_sf <- bind_cols(outdat_sf, pntscellgrps[, c("rowid", "cellgrp")]) %>%
 ## Save layer of outsite (cell-group) polygons 
 
 saveRDS(grid_re2, 
-        paste0("data/analysis/site_nodes/outsite_polygons_alldatatypes_", season, ".rds"))
+        "data/analysis/site_nodes/outsite_polygons_alldatatypes_all.rds")
 
 ## Recombine out and in data w/ site info for all data ------------------------
 
@@ -171,7 +156,7 @@ alldat2 <- outdat_sf %>% st_drop_geometry() %>% bind_rows(indat) %>%
 ### SAVE 
 saveRDS(
   alldat2, 
-  paste0("data/analysis/combined/alldatatypes_ibas_outsites_", season, ".rds"))
+  "data/analysis/combined/alldatatypes_ibas_outsites_all.rds")
 
 
 # create reference table of sites w/ obs --------------------------------------
@@ -185,4 +170,4 @@ site_summ <- alldat2 %>%
 ## SAVE 
 saveRDS(
   site_summ, 
-  paste0("data/analysis/site_nodes/alldatatypes_allsites_cent_", season, ".rds"))
+  "data/analysis/site_nodes/alldatatypes_allsites_cent_all.rds")
