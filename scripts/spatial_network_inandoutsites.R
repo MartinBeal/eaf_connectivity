@@ -19,7 +19,17 @@ season <- "all"
 # dtype <- "color"
 dtype <- "trax"
 
-## Load site cummary both IBAs and outsite centroids) ------------------------
+## Defining edges, three options: ---------------------------------------------
+#1: population-level (only unique connections across all birds)
+#2: individual-level (sum of all unique connections per bird)
+#3: movement-level   (all observations of movement btwn sites )
+
+edgetype <- "pop"
+# edgetype <- "ind"
+# edgetype <- "obs"
+
+
+## Load site summary both IBAs and outsite centroids) ------------------------
 site_summ <- readRDS(
   paste0("data/analysis/site_nodes/alldatatypes_allsites_cent_all.rds")
 )
@@ -103,24 +113,45 @@ oneid_list <- lapply(
     )
     ## remove self connections
     xx <- xx[-which(xx$from == xx$to), ]
-    ## identify identical connections ignoring order (undirected)
-    xx$sortcomb <- sapply(seq_along(xx$from), function(f){
-      rw <- xx[f,]
-      sortcomb <- paste(sort(c(rw$from, rw$to)), collapse = " ")
-      return(sortcomb)
-      })
     
-    ### one site-site connection per bird
-    ## remove duplicated connections (i.e. identical: from-->to, to-->from)
-    # ONLY FOR UNDIRECTED NETWORK!
-    if(any(duplicated(xx$sortcomb))){
-      xx <- xx[-which(duplicated(xx$sortcomb)), ]
+    #2: individual-level edges
+    if(edgetype == "ind"){
+      ## identify identical connections ignoring order (undirected)
+      xx$sortcomb <- sapply(seq_along(xx$from), function(f){
+        rw <- xx[f,]
+        sortcomb <- paste(sort(c(rw$from, rw$to)), collapse = " ")
+        return(sortcomb)
+      })
+      
+      ### one site-site connection per bird
+      ## remove duplicated connections (i.e. identical: from-->to, to-->from)
+      # ONLY FOR UNDIRECTED NETWORK!
+      if(any(duplicated(xx$sortcomb))){
+        xx <- xx[-which(duplicated(xx$sortcomb)), ]
+      }
     }
-
+    
     return(xx)
   })
 
 noself <- data.table::rbindlist(oneid_list)
+
+#1: population-level edges only
+if(edgetype == "pop"){
+  ## identify identical connections ignoring order (undirected)
+  sortcomb <- sapply(seq_along(noself$from), function(f){
+    rw <- noself[f,]
+    sortcomb <- paste(sort(c(rw$from, rw$to)), collapse = " ")
+    return(sortcomb)
+  })
+  
+  ### one site-site connection per bird
+  ## remove duplicated connections (i.e. identical: from-->to, to-->from)
+  # ONLY FOR UNDIRECTED NETWORK!
+  if(any(duplicated(sortcomb))){
+    noself <- noself[-which(duplicated(sortcomb)), ]
+  }
+}
 
 ## combine sites into single variable for summarizing
 noself$sitecomb <- paste(noself$from, noself$to)
@@ -232,11 +263,14 @@ mapview::mapview(nodesf, zcol="degree_rank")
 nodesf %>% filter(degree > 1) %>% mapview::mapview()
 # mapview::mapview(nodesf, zcol="btwn_rank") 
 mapview::mapview(nodesf, zcol="degree_rank") +
-# (filter(edgesf, from %in% 516 | to %in% 516) %>%
-  (filter(edgesf, from %in% 489 | to %in% 489 ) %>%
-  mapview::mapview())
+  # (filter(edgesf, from %in% 516 | to %in% 516) %>%
+  (filter(edgesf, from %in% 489 | to %in% 489) %>%
+     mapview::mapview())
 
 ## SAVE ##
 
-saveRDS(netsf, paste0("data/analysis/networks/", dtype,"_", season, "_iba_hex_10km.rds"))
-
+saveRDS(
+  netsf, 
+  paste0("data/analysis/networks/", dtype,"_", season, "_", edgetype, 
+         "edge_iba_hex_10km.rds")
+)
