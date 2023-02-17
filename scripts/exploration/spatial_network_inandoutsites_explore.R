@@ -115,10 +115,10 @@ oneid_list <- lapply(
     )
     ## remove self connections
     if(any(xx$from == xx$to)){
-    xx <- xx[-which(xx$from == xx$to), ]
+      xx <- xx[-which(xx$from == xx$to), ]
     }
     #2: individual-level edges
-    if(edgetype == "ind"){
+    # if(edgetype == "ind"){
       ## identify identical connections ignoring order (undirected)
       xx$sortcomb <- sapply(seq_along(xx$from), function(f){
         rw <- xx[f,]
@@ -132,18 +132,18 @@ oneid_list <- lapply(
       if(any(duplicated(xx$sortcomb))){
         xx <- xx[-which(duplicated(xx$sortcomb)), ]
       }
-    }
+    # }
     
     return(xx)
   })
 
-noself <- data.table::rbindlist(oneid_list)
+full <- data.table::rbindlist(oneid_list)
 
 #1: population-level edges only
 if(edgetype == "pop"){
-  ## identify identical connections ignoring order (undirected)
-  sortcomb <- sapply(seq_along(noself$from), function(f){
-    rw <- noself[f,]
+# identify identical connections ignoring order (undirected)
+  sortcomb <- sapply(seq_along(full$from), function(f){
+    rw <- full[f,]
     sortcomb <- paste(sort(c(rw$from, rw$to)), collapse = " ")
     return(sortcomb)
   })
@@ -152,59 +152,39 @@ if(edgetype == "pop"){
   ## remove duplicated connections (i.e. identical: from-->to, to-->from)
   # ONLY FOR UNDIRECTED NETWORK!
   if(any(duplicated(sortcomb))){
-    noself <- noself[-which(duplicated(sortcomb)), ]
+    popflat <- full[-which(duplicated(sortcomb)), ]
   }
 }
 
-## combine sites into single variable for summarizing
-noself$sitecomb <- paste(noself$from, noself$to)
-
 ## retain only unique site combos, summ how many individuals for connex
-n_id_total <- n_distinct(noself$bird_id)
+n_id_total <- n_distinct(full$bird_id)
 
-edgelist <- noself %>% group_by(sitecomb) %>% 
+edge_strength <- full %>% group_by(sortcomb) %>% 
   summarise(
     n_id = n(),
-    prop_id = n_id / n_id_total
+    prop_id = n_id / n_id_total,
+    prop_id_not = 1 - prop_id,
   )
+
+popflat %<>% dplyr::select(sortcomb) %>% 
+  left_join(edge_strength)
 
 ## re-split site combos into separate columns
 edgelist <- cbind(
-  edgelist,
-  str2col(edgelist$sitecomb,
+  popflat,
+  str2col(popflat$sortcomb,
           pattern = " ", 
           cols = 1:2, colnames = c("from", "to"))
 ) %>% 
-  dplyr::select(from, to, n_id, prop_id) %>% 
+  dplyr::select(from, to, n_id, prop_id, prop_id_not) %>% 
   as_tibble()
 
-## Weight - proportion of marked population forming an edge (making connexion)
-# edgelist$weight <- edgelist$prop_id
+### Weight - proportion of marked population NOT forming an edge (making connexion)
+## weight interpreted as 'distance' so higher value is weaker connection
+# so if large prop. of pop make connection, this value would be lower, connex stronger
+edgelist$weight <- edgelist$prop_id_not
 
 ## Vertex list ---------------------------------------------------------------
-# if(dtype %in% c("color", "metal")){
-#   n_obstype <- netdat %>% 
-#     group_by(loc_num, SitRecID, obstype) %>% 
-#     summarise(
-#       n_obs = n()
-#     ) %>% tidyr::pivot_wider(
-#       # id_cols = "obstype",
-#       names_from = "obstype",
-#       names_prefix = "n_",
-#       values_from = "n_obs"
-#     )
-# } else if (dtype == "trax"){
-#   n_obstype <- netdat %>% 
-#     group_by(loc_num, SitRecID, device) %>% 
-#     summarise(
-#       n_obs = n()
-#     ) %>% tidyr::pivot_wider(
-#       names_from = "device",
-#       names_prefix = "n_",
-#       values_from = "n_obs"
-#     )
-# }
-
 n_id_total <- n_distinct(netdat$bird_id)
 
 nodelist <- netdat %>% group_by(loc_num, SitRecID) %>% 
@@ -247,10 +227,12 @@ netsf %<>%
     degree      = centrality_degree(loops = FALSE), # no self-connections
     degree_norm = degree / n_distinct(loc_num), # normalized 0-1 (prop of sites)
     degree_rank = dense_rank(desc(degree)),
+    strength    = centrality_degree(loops = FALSE, weights = weight), # sum of edge weights
     between     = centrality_betweenness(directed = FALSE, weights = NULL), # node betweenness
-    between_w   = centrality_betweenness(directed = FALSE, weights = weight), # node betweenness
+    between_w   = centrality_betweenness(directed = FALSE, weights = prop_id), # node betweenness
     between_norm = centrality_betweenness(directed = FALSE, normalized = T), # normalized
-    btwn_rank   = dense_rank(desc(between))
+    btwn_rank   = dense_rank(desc(between)),
+    btwn_w_rank   = dense_rank(desc(between_w))
   )
 
 ## global metrics 
@@ -273,10 +255,10 @@ global_metrics <- data.frame(
 )
 
 ## SAVE 
-write.csv(
-  global_metrics, 
-  paste0("data/analysis/summaries/", dtype, "_", season, "_global_metrics.csv"),
-  row.names = F)
+# write.csv(
+#   global_metrics, 
+#   paste0("data/analysis/summaries/", dtype, "_", season, "_global_metrics.csv"),
+#   row.names = F)
 
 ## interactive map it
 nodesf <- netsf %>% activate("nodes") %>% sf::st_as_sf()
@@ -286,20 +268,23 @@ edgesf <- netsf %>% activate("edges") %>% sf::st_as_sf()
 mapview::mapview(nodesf, zcol="degree") +
   mapview::mapview(edgesf)
 
+mapview::mapview(nodesf, zcol="between_w") +
+  mapview::mapview(edgesf, zcol="prop_id")
 
 ## just nodes
 # mapview::mapview(nodesf, zcol="n_id")
 mapview::mapview(nodesf, zcol="between")
 # mapview::mapview(nodesf, zcol="degree")
+mapview::mapview(nodesf, zcol="strength")
 # mapview::mapview(nodesf, zcol="between_norm")
 # mapview::mapview(nodesf, zcol="degree_rank")
 # mapview::mapview(nodesf, zcol="btwn_rank")
 # nodesf %>% filter(degree > 1) %>% mapview::mapview()
 # mapview::mapview(nodesf, zcol="btwn_rank") 
 # mapview::mapview(nodesf, zcol="degree_rank") +
-  # (filter(edgesf, from %in% 516 | to %in% 516) %>%
-  # (filter(edgesf, from %in% 489 | to %in% 489) %>%
-  #    mapview::mapview())
+# (filter(edgesf, from %in% 516 | to %in% 516) %>%
+# (filter(edgesf, from %in% 489 | to %in% 489) %>%
+#    mapview::mapview())
 
 ## SAVE ##
 

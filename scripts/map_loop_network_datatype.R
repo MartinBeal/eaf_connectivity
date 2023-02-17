@@ -3,9 +3,9 @@
 pacman::p_load(sfnetworks, sf, dplyr, magrittr, ggplot2)
 
 ## which network to create
-# season <- "all"
+season <- "all"
 # season <- "spring"
-season <- "fall"
+# season <- "fall"
 
 ## networks including in and out sites
 m_net <- readRDS(
