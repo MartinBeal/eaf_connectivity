@@ -121,6 +121,12 @@ outdat_sf <- bind_cols(outdat_sf, pntscellgrps[, c("rowid", "cellgrp")]) %>%
     SitRecID = cellgrp ## make the cell group the main site ID
   )
 
+## give an identifier to share w/ IBA data ------------------------------------
+grid_re2 %<>% mutate(
+  cellgrp = paste0("cellgrp_", cellgrp),
+  SitRecID  = cellgrp ## make the cell group the main site ID
+) 
+
 ## Save layer of outsite (cell-group) polygons 
 
 saveRDS(grid_re2, 

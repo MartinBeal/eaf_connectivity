@@ -17,11 +17,11 @@ for(i in seq_along(seasons)){
   season <- seasons[i]
   
   m_net <- readRDS(
-    paste0("data/analysis/networks/metal_", season, "_iba10km_poly.rds"))
+    paste0("data/analysis/networks/metal_", season, "_iba_hex_10km.rds"))
   c_net <- readRDS(
-    paste0("data/analysis/networks/color_", season, "_iba10km_poly.rds"))
+    paste0("data/analysis/networks/color_", season, "_iba_hex_10km.rds"))
   t_net <- readRDS(
-    paste0("data/analysis/networks/trax_", season, "_iba10km_poly.rds"))
+    paste0("data/analysis/networks/trax_", season, "_iba_hex_10km.rds"))
   
   
   ## interactive map it
@@ -44,62 +44,76 @@ for(i in seq_along(seasons)){
     data_type = c("together", "metal", "color", "tracking"),
     season = rep(season),
     n_nodes = c(
-      n_distinct(c(m_nodes$site_poly, c_nodes$site_poly, t_nodes$site_poly)), 
-      nrow(m_nodes), nrow(c_nodes), nrow(t_nodes)),
-    n_edges = c(NA, nrow(m_edges), nrow(c_edges), nrow(t_edges))
+      n_distinct(c(m_nodes$loc_num, c_nodes$loc_num, t_nodes$loc_num)),
+      n_distinct(m_nodes$loc_num), 
+      n_distinct(c_nodes$loc_num), 
+      n_distinct(t_nodes$loc_num)),
+    n_edges = 
+      c(n_distinct(c(m_edges$link_id, c_edges$link_id, t_edges$link_id)),
+        n_distinct(m_edges$link_id), 
+        n_distinct(c_edges$link_id), 
+        n_distinct(t_edges$link_id))
   )
   global_compare
   
-  # write.csv(global_compare, paste0("data/summaries/global_net_compare_", season, ".csv"))
+  ## SAVE
+  write.csv(
+    global_compare, 
+    paste0("data/analysis/summaries/global_net_compare_", season, ".csv"), 
+    row.names = F)
   
   
   ## Correspondence matrix of sites used by data types --------------------------
   comp_df <- expand.grid(
-    c("metal", "color", "tracking"),c("metal", "color", "tracking"))
-  comp_df %<>% dplyr::select(Var2, Var1) %>% rename(typeA = Var2, typeB=Var1) %>% 
+    c("metal", "color", "tracking"), c("metal", "color", "tracking"))
+  
+  comp_df %<>% 
+    dplyr::select(Var2, Var1) %>% 
+    rename(focal = Var2, coveredby=Var1) %>% 
     mutate(season = season)
   
   ## how well does data B cover data A? 
   # eg. how many sites identified from tracking are id'd from color resights?
   comp_df$n_sites_cover <- c(
-    n_distinct(m_nodes$site_poly),
-    sum(c_nodes$site_poly %in% m_nodes$site_poly),
-    sum(t_nodes$site_poly %in% m_nodes$site_poly),
-    sum(m_nodes$site_poly %in% c_nodes$site_poly),
-    n_distinct(c_nodes$site_poly),
-    sum(t_nodes$site_poly %in% c_nodes$site_poly),
-    sum(m_nodes$site_poly %in% t_nodes$site_poly),
-    sum(c_nodes$site_poly %in% t_nodes$site_poly),
-    n_distinct(t_nodes$site_poly)
+    n_distinct(m_nodes$loc_num),
+    sum(c_nodes$loc_num %in% m_nodes$loc_num),
+    sum(t_nodes$loc_num %in% m_nodes$loc_num),
+    sum(m_nodes$loc_num %in% c_nodes$loc_num),
+    n_distinct(c_nodes$loc_num),
+    sum(t_nodes$loc_num %in% c_nodes$loc_num),
+    sum(m_nodes$loc_num %in% t_nodes$loc_num),
+    sum(c_nodes$loc_num %in% t_nodes$loc_num),
+    n_distinct(t_nodes$loc_num)
   )
   
   comp_df %<>% mutate(
-    n_sites = ifelse(typeA == "metal", n_distinct(m_nodes$site_poly),
-                     ifelse(typeA == "color", n_distinct(c_nodes$site_poly),
-                            n_distinct(t_nodes$site_poly))),
-    perc_cover = round(n_sites_cover / n_sites *100,0)
-  ) %>% filter(typeA != typeB)
+    n_sites = ifelse(focal == "metal", n_distinct(m_nodes$loc_num),
+                     ifelse(focal == "color", n_distinct(c_nodes$loc_num),
+                            n_distinct(t_nodes$loc_num))),
+    perc_cover = round(n_sites_cover / n_sites * 100, 0)
+  ) %>% filter(focal != coveredby)
   
   comp_df
   
   ggplot() +
-    geom_raster(data=comp_df, aes(x=typeA, y=typeB, fill=perc_cover)) +
+    geom_raster(data=comp_df, aes(x=focal, y=coveredby, fill=perc_cover)) +
     scale_fill_gradient(limits = c(0,100)) +
+    geom_text(data=comp_df, 
+              aes(x=focal, y=coveredby, label=perc_cover), color = "red", size=5) +
     # scale_fill_gradient(high = "#132B43", low = "#56B1F7", limits = c(0,100)) +
     # scale_fill_distiller(palette ="Blues", direction = 1) +
     theme_bw() + theme(panel.grid.major = element_blank()) +
-    xlab("Covered") + ylab("Covering") + labs(fill="% coverage")
+    xlab("Focal") + ylab("Covered by") + labs(fill="% coverage")
   
-  ## SAVE ##
-  # ggsave(paste0("figures/site_coverage_compare_", season, "_iba10kmX.png"), width=5.5, height = 4)
+  # SAVE ##
+  ggsave(paste0("figures/site_coverage_compare_", season, "_iba_hex_10km.png"), width=5.5, height = 4)
   
   # write.csv(
   #   comp_df, paste0(
   #     "data/analysis/summaries/compare_networks_pairwise_deg10_node_coverage_", season, ".csv",
   #     row.names = F)
   
-  
-  ## ----------------------------------------------------------------------------
+   ## ----------------------------------------------------------------------------
   ## Combine all three ----------------------------------------------------------
   ## ----------------------------------------------------------------------------
   
@@ -111,7 +125,7 @@ for(i in seq_along(seasons)){
   
   ## which sites are in top 10% for degree
   m_df %<>% dplyr::select(
-    site_poly, n_id, n_obs, degree, degree_rank, between, btwn_rank, geometry) %>% 
+    loc_num, n_id, n_obs, degree, degree_rank, between, btwn_rank, geometry) %>% 
     rename(n_id.m = n_id, n_obs.m = n_obs, degree.m = degree, 
            degree_rank.m = degree_rank, between.m = between, 
            btwn_rank.m = btwn_rank) %>% 
@@ -121,7 +135,7 @@ for(i in seq_along(seasons)){
     )
   
   c_df %<>% dplyr::select(
-    site_poly, n_id, n_obs, degree, degree_rank, between, btwn_rank, geometry) %>% 
+    loc_num, n_id, n_obs, degree, degree_rank, between, btwn_rank, geometry) %>% 
     rename(n_id.c = n_id, n_obs.c = n_obs, degree.c = degree, 
            degree_rank.c = degree_rank, between.c = between, 
            btwn_rank.c = btwn_rank) %>% 
@@ -131,7 +145,7 @@ for(i in seq_along(seasons)){
     )
   
   t_df %<>% dplyr::select(
-    site_poly, n_id, n_obs, degree, degree_rank, between, btwn_rank, geometry) %>% 
+    loc_num, n_id, n_obs, degree, degree_rank, between, btwn_rank, geometry) %>% 
     rename(n_id.t = n_id, n_obs.t = n_obs, degree.t = degree, 
            degree_rank.t = degree_rank, between.t = between, 
            btwn_rank.t = btwn_rank) %>% 
@@ -143,7 +157,7 @@ for(i in seq_along(seasons)){
   ## merge 
   onetwothree <- plyr::join_all(
     list(m_df, c_df, t_df), 
-    by='site_poly', type='full'
+    by='loc_num', type='full'
   )
   
   onetwothree %<>% mutate(

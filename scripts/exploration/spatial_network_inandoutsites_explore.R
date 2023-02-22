@@ -24,16 +24,6 @@ dtype <- "metal"
 # dtype <- "color"
 # dtype <- "trax"
 
-## Defining edges, three options: ---------------------------------------------
-#1: population-level (only unique connections across all birds)
-#2: individual-level (sum of all unique connections per bird)
-#3: movement-level   (all observations of movement btwn sites )
-
-edgetype <- "pop"
-# edgetype <- "ind"
-# edgetype <- "obs"
-
-
 ## Load site summary both IBAs and outsite centroids) ------------------------
 site_summ <- readRDS(
   paste0("data/analysis/site_nodes/alldatatypes_allsites_cent_all.rds")
@@ -96,10 +86,16 @@ xz2 <- filter(nsites, nsites == 1)
 netdat <- subset(netdat, !bird_id %in% xz2$bird_id)
 
 ## (local) numeric code of nodes/sites ------------------------------------------------
-# netdat$loc_num <- as.numeric(as.factor(netdat$site_poly)) # name
-netdat$loc_num <- as.numeric(as.factor(netdat$SitRecID))  # (absolute) numeric
+# netdat$loc_num <- as.numeric(as.factor(netdat$SitRecID))  # (absolute) numeric
+site_summ$loc_num <- as.numeric(as.factor(site_summ$SitRecID))  # (absolute) numeric
+
+netdat %<>% left_join(site_summ)
 
 ## Edge list ------------------------------------------------------------------
+## Defining edges, three approaches: ------------------------------------------
+#1: population-level (only unique connections across all birds)
+#2: individual-level (sum of all unique connections per bird)
+#3: movement-level   (all observations of movement btwn sites )
 
 oneid_list <- split(netdat, netdat$bird_id)
 
@@ -108,7 +104,7 @@ oneid_list <- lapply(
   seq_along(oneid_list), 
   function(x){
     one <- oneid_list[[x]]
-    xx <- data.frame(
+    xx  <- data.frame(
       bird_id = one$bird_id[1],
       from = one$loc_num[1:nrow(one)-1],
       to   = one$loc_num[2:nrow(one)]
@@ -120,8 +116,9 @@ oneid_list <- lapply(
     #2: individual-level edges
     # if(edgetype == "ind"){
       ## identify identical connections ignoring order (undirected)
-      xx$sortcomb <- sapply(seq_along(xx$from), function(f){
-        rw <- xx[f,]
+      xxx <- xx
+      xxx$sortcomb <- sapply(seq_along(xxx$from), function(f){
+        rw <- xxx[f,]
         sortcomb <- paste(sort(c(rw$from, rw$to)), collapse = " ")
         return(sortcomb)
       })
@@ -129,37 +126,39 @@ oneid_list <- lapply(
       ### one site-site connection per bird
       ## remove duplicated connections (i.e. identical: from-->to, to-->from)
       # ONLY FOR UNDIRECTED NETWORK!
-      if(any(duplicated(xx$sortcomb))){
-        xx <- xx[-which(duplicated(xx$sortcomb)), ]
+      if(any(duplicated(xxx$sortcomb))){
+        xxx <- xxx[-which(duplicated(xxx$sortcomb)), ]
       }
     # }
-    
-    return(xx)
+    alist <- list(xx, xxx)
+    return(alist)
   })
 
-full <- data.table::rbindlist(oneid_list)
+## each obs is a new link
+obsfull <- data.table::rbindlist(lapply(oneid_list, function(x) x[[1]]))
+## each ind. birds has set of unique links
+indfull <-  data.table::rbindlist(lapply(oneid_list, function(x) x[[2]]))
 
-#1: population-level edges only
-if(edgetype == "pop"){
+## Population-level edges only (i.e. no overlapping links)
 # identify identical connections ignoring order (undirected)
-  sortcomb <- sapply(seq_along(full$from), function(f){
-    rw <- full[f,]
+obsfull$sortcomb <- sapply(
+  seq_along(obsfull$from), function(f){
+    rw <- obsfull[f,]
     sortcomb <- paste(sort(c(rw$from, rw$to)), collapse = " ")
     return(sortcomb)
-  })
-  
-  ### one site-site connection per bird
-  ## remove duplicated connections (i.e. identical: from-->to, to-->from)
-  # ONLY FOR UNDIRECTED NETWORK!
-  if(any(duplicated(sortcomb))){
-    popflat <- full[-which(duplicated(sortcomb)), ]
-  }
+})
+
+### one site-site connection per bird
+## remove duplicated connections (i.e. identical: from-->to, to-->from)
+# ONLY FOR UNDIRECTED NETWORK!
+if(any(duplicated(obsfull$sortcomb))){
+  popflat <- obsfull[-which(duplicated(obsfull$sortcomb)), ]
 }
 
-## retain only unique site combos, summ how many individuals for connex
-n_id_total <- n_distinct(full$bird_id)
+## retain only unique site combos, summ how many individuals form connex
+n_id_total <- n_distinct(indfull$bird_id)
 
-edge_strength <- full %>% group_by(sortcomb) %>% 
+edge_strength <- indfull %>% group_by(sortcomb) %>% 
   summarise(
     n_id = n(),
     prop_id = n_id / n_id_total,
@@ -176,7 +175,8 @@ edgelist <- cbind(
           pattern = " ", 
           cols = 1:2, colnames = c("from", "to"))
 ) %>% 
-  dplyr::select(from, to, n_id, prop_id, prop_id_not) %>% 
+  dplyr::select(from, to, sortcomb, n_id, prop_id, prop_id_not) %>% 
+  dplyr::rename(link_id = sortcomb) %>% 
   as_tibble()
 
 ### Weight - proportion of marked population NOT forming an edge (making connexion)
@@ -265,17 +265,17 @@ nodesf <- netsf %>% activate("nodes") %>% sf::st_as_sf()
 edgesf <- netsf %>% activate("edges") %>% sf::st_as_sf()
 #   mapview::mapview(nodesf, zcol="n_id")
 
-mapview::mapview(nodesf, zcol="degree") +
-  mapview::mapview(edgesf)
-
-mapview::mapview(nodesf, zcol="between_w") +
-  mapview::mapview(edgesf, zcol="prop_id")
+# mapview::mapview(nodesf, zcol="degree") +
+#   mapview::mapview(edgesf)
+# 
+# mapview::mapview(nodesf, zcol="between_w") +
+#   mapview::mapview(edgesf, zcol="prop_id")
 
 ## just nodes
 # mapview::mapview(nodesf, zcol="n_id")
-mapview::mapview(nodesf, zcol="between")
+# mapview::mapview(nodesf, zcol="between")
 # mapview::mapview(nodesf, zcol="degree")
-mapview::mapview(nodesf, zcol="strength")
+# mapview::mapview(nodesf, zcol="strength")
 # mapview::mapview(nodesf, zcol="between_norm")
 # mapview::mapview(nodesf, zcol="degree_rank")
 # mapview::mapview(nodesf, zcol="btwn_rank")
@@ -290,6 +290,5 @@ mapview::mapview(nodesf, zcol="strength")
 
 saveRDS(
   netsf, 
-  paste0("data/analysis/networks/", dtype,"_", season, "_", edgetype, 
-         "edge_iba_hex_10km.rds")
+  paste0("data/analysis/networks/", dtype,"_", season, "_iba_hex_10km.rds")
 )
