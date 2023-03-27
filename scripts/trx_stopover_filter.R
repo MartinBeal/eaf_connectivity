@@ -12,7 +12,12 @@ season <- "all"
 # season <- "spring"
 # season <- "fall"
 
-trxdat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_ibas.rds")
+## datatypes combined 
+alldat <- readRDS("data/analysis/alldatatypes_100km_ibas.rds")
+trxdat <- filter(alldat, datatype == "trax")
+
+## OLD
+# trxdat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_ibas.rds")
 
 ### Separate networks for fall and spring migration ---------------------------
 ## Spring: January 1 - June 30th, Fall: June 24th - January 31st
@@ -90,6 +95,9 @@ trxdat2 <- trxdat %>%
 trxdat2 <- filter(trxdat2, n_day >= 2)
 
 
+alldat2 <- bind_rows(trxdat2, filter(alldat, datatype != "trax")) 
+
 ## SAVE 
 
-saveRDS(trxdat2, "data/analysis/tracking/PTT_GPS_mconn_12h_no0_stpovrs_ibas.rds")
+# saveRDS(alldat2, "data/analysis/tracking/PTT_GPS_mconn_12h_no0_stpovrs_ibas.rds")
+saveRDS(alldat2, "data/analysis/alldatatypes_100km_ibas_stpovrs.rds")

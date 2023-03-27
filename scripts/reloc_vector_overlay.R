@@ -139,6 +139,31 @@ alldat2 %<>% mutate(
 ## rename
 alldat2 %<>% rename(site_poly = IntName) ## IBAs only
 
+
+## Calculate number of consecutive days spent at a site -----------------------
+alldat2 <- as.data.table(alldat2)
+
+## id consecutive obs at a site, per bird (data.table way)
+alldat2[, samesite := data.table::rleid(SitRecID),
+        by = bird_id]
+
+alldat2$samesite <- ifelse(is.na(alldat2$SitRecID), NA, alldat2$samesite) # NA where site NA
+
+## number of consecutive days at a site
+alldat2 <- alldat2 %>%
+  group_by(bird_id, samesite) %>%
+  summarise(n_day = n_distinct(yday(timestamp))) %>% 
+  left_join(alldat2)
+
+## remove points outside polygons and points w/in from visits <= 1 day
+# alldat2 %>% filter(n_day > 1 & SitRecID != "none") %>% st_as_sf(
+#   coords = c("longitude", "latitude"),
+#   crs = 4326) %>% mapview()
+
+# alldat2 %>% filter(bird_id == "R\xfcschke") %>%
+#   st_as_sf(coords = c("longitude", "latitude"),
+#            crs = 4326, agr = "constant") %>% mapview()
+
 ## SAVE -----------------------------------------------------------------------
 
 saveRDS(alldat2, "data/analysis/alldatatypes_100km_ibas.rds")

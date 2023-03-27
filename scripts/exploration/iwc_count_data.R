@@ -1,3 +1,5 @@
+## International waterbird census data
+
 
 iwc <- read.csv("data/IWC_counts/DR_MBeal_080223.csv")
 
@@ -13,9 +15,14 @@ iwc <- iwc %>%
   st_as_sf(coords = c("x", "y"), 
          crs = 4326, agr = "constant")
 
+## Remove bad count (wrong species) at Banc D'Arguin
+iwc <- filter(iwc, site != "MR00030" & count != 15268)
+
 ## Remove locations w/ no 
 
-iwc %>% arrange(desc(count)) %>% slice(1:1000) %>% mapview(zcol="count")
+x <- iwc %>% arrange(desc(count)) %>% slice(1:1000) %>% mapview(zcol="count")
+
+mapshot(x, url="C:/Users/Martim Bill/Desktop/XX.html")
 
 ## summarize across years
 iwc_summ <- iwc %>% 
@@ -44,12 +51,17 @@ iwc_summ100 %>% mapview(zcol="mean_count")
 
 ## Overlay on nodes/sites found from tracking/color/metal ---------------------
 
-## save
 allsites <- readRDS(
-  "data/analysis/alldatatypes_allsites_poly_all.rds"
-)
+  "data/analysis/site_nodes/allsite_polygons_alldatatypes_all.rds")
 
 allsites$rowid <- as.character(seq_len(nrow(allsites)))
+
+## Load site summary both IBAs and outsite centroids) ------------------------
+site_summ <- readRDS(
+  paste0("data/analysis/site_nodes/alldatatypes_allsites_cent_all.rds")
+)
+
+allsites %<>% left_join(st_drop_geometry(site_summ))
 
 ## overlay count points on site polys, and get T/F if overlaps
 iwc_summ$ovr_mct_site <- apply(st_intersects(iwc_summ, allsites), 1, any)
@@ -154,14 +166,19 @@ iwc_summ2 %<>% mutate(
 
 ### do some sense-checks
 ## check point falling in/around a site
-mapview(subset(allsites, site_poly == "Tejo estuary")) + (iwc_summ2 %>% filter(site_poly == "Tejo estuary") %>% st_as_sf(
-  coords = c("longitude", "latitude"),
-  crs = 4326) %>% mapview())
+mapview(subset(allsites, site_poly == "Tejo estuary")) + 
+  (iwc_summ2 %>% filter(site_poly == "Tejo estuary") %>% 
+     st_as_sf(
+       coords = c("longitude", "latitude"),
+       crs = 4326) %>% mapview())
 # ## points not considered in/around a site 
 # mapview(subset(iba, IntName == "Tejo estuary")) + (alldat2 %>% filter(IntName == "none") %>% st_as_sf(
 #   coords = c("longitude", "latitude"), 
 #   crs = 4326) %>% mapview())
 
+
+## remove sites w/ 0 counts
+iwc_summ2 %<>% filter(min_count > 1)
 
 ## SAVE -----------------------------------------------------------------------
 
@@ -174,9 +191,6 @@ saveRDS(
 ## maps ------------------------------------------------------------------------
 
 ## just count sites and mean totals ------------------------------------------
-
-## remove sites w/ 0 counts
-iwc_summ %<>% filter(mean_count != 0)
 
 # get world map
 wmap <- rworldmap::getMap(resolution="high")
@@ -208,7 +222,7 @@ maptheme <-
 ### 
 map <- ggplot() +
   geom_sf(data = wmap_prj, fill = "grey70", color = "white", size=0.2) +
-  geom_sf(data = iwc_summ,  
+  geom_sf(data = iwc_summ2,  
           aes(), color = "black", size=0.5) +
   geom_sf(data = arrange(iwc_summ100, mean_count),  
           aes(color = mean_count), size = 2) +

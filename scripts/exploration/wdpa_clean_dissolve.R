@@ -15,6 +15,10 @@ port_clean <- wdpa_clean(
   retain_status  = c("Designated", "Inscribed", "Established"),
   erase_overlaps = FALSE) 
 
+## remove marine only PAs
+
+port_clean <- filter(port_clean, MARINE != "marine")
+
 port_dissolve <- wdpa_dissolve(port_clean)
 
 port_split <- port_dissolve %>% 

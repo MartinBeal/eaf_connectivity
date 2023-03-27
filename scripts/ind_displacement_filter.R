@@ -1,3 +1,4 @@
+# -----------------------------------------------------------------------------
 ### Combine all three data type 
 ## Filter individual data based on displacement threshold -------------------
 # -----------------------------------------------------------------------------
@@ -28,10 +29,14 @@ metdat %<>% rename(timestamp = date) %>% mutate(
     study_site, device, obstype
   )
 
-## tracking locations overlaid on polygon layer
-trxdat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_stpovrs_ibas.rds")
+## tracking locations overlaid on polygon layer (OLD)
+# trxdat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0_stpovrs_ibas.rds")
+## tracking locations speed filtered, resampled
+trxdat <- readRDS("data/analysis/tracking/PTT_GPS_mconn_12h_no0.rds")
+
 trxdat %<>% rename(
-  metal = animal_ring_id) %>% mutate(
+  metal = animal_ring_id,
+  bird_id = id) %>% mutate(
   datatype  = "trax",
   scheme_country = NA,
   obstype = NA,
@@ -105,12 +110,12 @@ ggsave(paste0("figures/alldtypes_id_displ_hist.png"), height = 10, width = 4)
 wmig <- filter(displ_id, mx_displ >= 100)
 
 allids <- n_distinct(alldat$id)
-alldat %<>% filter(id %in% wmig$id)
-(1 - n_distinct(alldat$id) / allids) * 100 ## % of all IDs removed by filter
+alldat2 <- alldat %>% filter(id %in% wmig$id)
+(1 - n_distinct(alldat2$id) / allids) * 100 ## % of all IDs removed by filter
 
-alldat <- rename(alldat, bird_id = id)
+alldat2 <- rename(alldat2, bird_id = id)
 
 
 ### SAVE ### ------------------------------------------------------------------
 
-saveRDS(alldat, "data/analysis/combined/alldatatypes_100km_all.rds")
+saveRDS(alldat2, "data/analysis/combined/alldatatypes_100km_all.rds")

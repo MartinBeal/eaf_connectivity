@@ -28,8 +28,8 @@ for(i in seq_along(seasons)){
   anet <- m_net
   nodesf <- anet %>% activate("nodes") %>% sf::st_as_sf()
   edgesf <- anet %>% activate("edges") %>% sf::st_as_sf()
-  mapview::mapview(nodesf, zcol="n_id")
-  mapview::mapview(edgesf)
+  # mapview::mapview(nodesf, zcol="n_id")
+  # mapview::mapview(edgesf)
   
   ## split up nodes and edges ---------------------------------------------------
   m_nodes <- st_as_sf(m_net, "nodes")
@@ -178,11 +178,19 @@ for(i in seq_along(seasons)){
       lat_group = factor(lat_group, levels = c("1", "2" , "3", "4")),
     )
   
+  ## use turbo scale
+  turboscl <- viridis::viridis(n = 6, option = "H")
+  
   ggplot() +
     geom_col(data=latgrp_summ, aes(x=perc_sites, y=lat_group, fill=cat_discover)) +
-    scale_fill_manual(
-      values=c("M"="red", "MC"="orange", "C"="yellow", "CT"="green", "T"= "blue", 
-               "MT"="purple", "MCT"="black"),
+    # scale_fill_manual(
+    #   values=c("M"="red", "MC"="orange", "C"="yellow", "CT"="green", "T"= "blue", 
+    #            "MT"="purple", "MCT"="black"),
+    #   labels=c("M"="Metal", "MC"="Metal/Color", "C"="Color", "CT"="Color/Track", "T"= "Track","MT"="Metal/Track", "MCT"="All")
+    # ) +
+    scale_fill_manual( ## original rainbow colors
+      values=c("M"=turboscl[6], "MC"=turboscl[5], "C"=turboscl[4], "CT"=turboscl[3], "T"= turboscl[2], 
+               "MT"=turboscl[1], "MCT"="black"),
       labels=c("M"="Metal", "MC"="Metal/Color", "C"="Color", "CT"="Color/Track", "T"= "Track","MT"="Metal/Track", "MCT"="All")
     ) +
     theme_bw() + 
@@ -250,9 +258,14 @@ for(i in seq_along(seasons)){
              ylim = c(bbox_prj[2], bbox_prj[4]), 
              expand = T) +
     scale_size(range = c(0.01, 2)) +
-    scale_color_manual(
-      values=c("M"="red", "MC"="orange", "C"="yellow", "CT"="green", "T"= "blue", 
-               "MT"="purple", "MCT"="black"),
+    # scale_color_manual(
+    #   values=c("M"="red", "MC"="orange", "C"="yellow", "CT"="green", "T"= "blue", 
+    #            "MT"="purple", "MCT"="black"),
+    #   labels=c("M"="Metal", "MC"="Metal/Color", "C"="Color", "CT"="Color/Track", "T"= "Track","MT"="Metal/Track", "MCT"="All")
+    # ) +
+    scale_color_manual( ## original rainbow colors
+      values=c("M"=turboscl[6], "MC"=turboscl[5], "C"=turboscl[4], "CT"=turboscl[3], "T"= turboscl[2], 
+               "MT"=turboscl[1], "MCT"="black"),
       labels=c("M"="Metal", "MC"="Metal/Color", "C"="Color", "CT"="Color/Track", "T"= "Track","MT"="Metal/Track", "MCT"="All")
     ) +
     maptheme + 

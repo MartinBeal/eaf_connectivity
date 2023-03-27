@@ -16,7 +16,6 @@ netsf <- readRDS(
   paste0("data/analysis/networks/", dtype,"_", season, "_iba_hex_10km.rds")
 )
 
-## save
 allsites <- readRDS(
   "data/analysis/alldatatypes_allsites_poly_all.rds"
 )

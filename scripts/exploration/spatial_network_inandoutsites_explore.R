@@ -15,14 +15,14 @@ source("C:/Users/Martim Bill/Documents/R/source_scripts/sfnet_globalmetrics.R")
 ## choose data subset to run --------------------------------------------------
 
 ## which network to create
-season <- "all"
+# season <- "all"
 # season <- "spring"
-# season <- "fall"
+season <- "fall"
 
 ## Run through each data type -------------------------------------------------
-dtype <- "metal"
+# dtype <- "metal"
 # dtype <- "color"
-# dtype <- "trax"
+dtype <- "trax"
 
 ## Load site summary both IBAs and outsite centroids) ------------------------
 site_summ <- readRDS(
@@ -77,7 +77,7 @@ netdat <- subset(netdat, !bird_id %in% xz$bird_id)
 
 ## remove birds only seen (multiple times) at same site ----------------------- 
 nsites <- netdat %>% group_by(bird_id) %>% 
-  summarise(nsites = n_distinct(site_poly))
+  summarise(nsites = n_distinct(SitRecID))
 
 ## % of birds w/ relocs at one site only
 sum(nsites$nsites == 1) / n_distinct(netdat$bird_id) * 100
@@ -229,7 +229,7 @@ netsf %<>%
     degree_rank = dense_rank(desc(degree)),
     strength    = centrality_degree(loops = FALSE, weights = weight), # sum of edge weights
     between     = centrality_betweenness(directed = FALSE, weights = NULL), # node betweenness
-    between_w   = centrality_betweenness(directed = FALSE, weights = prop_id), # node betweenness
+    between_w   = centrality_betweenness(directed = FALSE, weights = weight), # node betweenness
     between_norm = centrality_betweenness(directed = FALSE, normalized = T), # normalized
     btwn_rank   = dense_rank(desc(between)),
     btwn_w_rank   = dense_rank(desc(between_w))
@@ -263,6 +263,10 @@ global_metrics <- data.frame(
 ## interactive map it
 nodesf <- netsf %>% activate("nodes") %>% sf::st_as_sf()
 edgesf <- netsf %>% activate("edges") %>% sf::st_as_sf()
+
+mapview::mapview(edgesf) + 
+  mapview::mapview(nodesf) 
+
 #   mapview::mapview(nodesf, zcol="n_id")
 
 # mapview::mapview(nodesf, zcol="degree") +

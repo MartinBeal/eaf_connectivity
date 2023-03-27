@@ -12,14 +12,12 @@ alldat <- readRDS("data/analysis/ringing/cr_merge.rds")
 
 ## get time difference between obs per bird -----------------------------------
 
-tictoc::tic()
 # creating an ordered data.table
 alldat <- data.table(alldat[order(alldat$bird_id, alldat$date), ])
 
 # super fast:
 # source: (https://stackoverflow.com/questions/32999460/how-to-calculate-time-difference-with-previous-row-of-a-data-frame-by-group)
 alldat[ , tdiff := c(0, diff(as.numeric(date))), by=bird_id]
-tictoc::toc()
 
 ## use 123456789 to replace NAs (an annoyance in ifelse statements to come)
 alldat$tdiff <- ifelse(as.numeric(alldat$tdiff) == 0, 123476789, alldat$tdiff)
@@ -32,7 +30,9 @@ alldat <- subset(alldat, !is.na(latitude))
 alldat <- subset(alldat, !is.na(longitude))
 
 ## again remove birds w/ only one sighting
-x <- alldat %>% group_by(bird_id) %>% summarise(nobs = n()) %>% filter(nobs == 1)
+x <- alldat %>% group_by(bird_id) %>% 
+  summarise(nobs = n()) %>% 
+  filter(nobs == 1)
 alldat <- filter(alldat, !bird_id %in% x$bird_id)
 
 ## assure time-bird order
